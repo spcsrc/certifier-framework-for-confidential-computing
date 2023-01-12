@@ -83,9 +83,9 @@ CERTIFIER_SRC = $(CERTIFIER_SRC_PATH)/certifier.cc             \
 		$(CERTIFIER_SRC_PATH)/test_support.cc          \
 		$(CERTIFIER_SRC_PATH)/gramine/gramine_api.cc   \
 		$(CERTIFIER_SRC_PATH)/certifier.pb.cc          \
-		$(CERTIFIER_SRC_PATH)/../sample_apps/gramine_attest_seal/gramine_trusted.cc \
+		$(CERTIFIER_SRC_PATH)/../sample_apps/simple_app_under_gramine/gramine_trusted.cc \
 
-CERTIFIER_INCLUDE = -I$(CERTIFIER_SRC_PATH)/../include -I$(CERTIFIER_SRC_PATH)/gramine -I$(CERTIFIER_SRC_PATH)/../sample_apps/gramine_attest_seal
+CERTIFIER_INCLUDE = -I$(CERTIFIER_SRC_PATH)/../include -I$(CERTIFIER_SRC_PATH)/gramine -I$(CERTIFIER_SRC_PATH)/../sample_apps/simple_app_under_gramine
 CERTIFIER_CFLAGS = $(CERTIFIER_INCLUDE) -DGRAMINE_CERTIFIER
 CERTIFIER_LDFLAGS = -lssl -lcrypto
 CERTIFIER_LDFLAGS += -L./ -L/usr/local/lib
