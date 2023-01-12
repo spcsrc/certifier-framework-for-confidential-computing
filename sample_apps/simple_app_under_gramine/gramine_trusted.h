@@ -19,3 +19,7 @@
 bool gramine_local_certify();
 bool gramine_seal();
 bool gramine_setup_certifier_functions(GramineCertifierFunctions gramineFuncs);
+bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size);
+bool cold_init();
+bool certify_me();
+bool setup_server_ssl();
