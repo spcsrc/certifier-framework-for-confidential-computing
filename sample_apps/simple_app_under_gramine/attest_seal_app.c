@@ -592,7 +592,7 @@ done:
     return status;
 }
 
-
+#if 0
 int main(int argc, char** argv) {
     int ret;
     size_t len;
@@ -662,6 +662,95 @@ int main(int argc, char** argv) {
     cert_result = gramine_seal();
     if (!cert_result) {
         printf("gramine_seal failed: result = %d\n", cert_result);
+        goto exit;
+    }
+
+    printf("Done with certifier tests\n");
+    fflush(stdout);
+
+exit:
+
+    if (ra_tls_attest_lib)
+        dlclose(ra_tls_attest_lib);
+
+    return ret;
+}
+#endif
+
+int main(int argc, char** argv) {
+    int ret;
+    size_t len;
+    void* ra_tls_attest_lib;
+
+    uint8_t* der_key = NULL;
+    uint8_t* der_crt = NULL;
+
+    mbedtls_ssl_context ssl;
+    mbedtls_ssl_config conf;
+
+    mbedtls_ssl_init(&ssl);
+    mbedtls_ssl_config_init(&conf);
+
+    printf("Attestation type:\n");
+    char attestation_type_str[SGX_QUOTE_SIZE] = {0};
+
+    ret = rw_file("/dev/attestation/attestation_type", (uint8_t*)attestation_type_str,
+                  sizeof(attestation_type_str) - 1, /*do_write=*/false);
+    if (ret < 0 && ret != -ENOENT) {
+        printf("User requested RA-TLS attestation but cannot read SGX-specific file "
+                       "/dev/attestation/attestation_type\n");
+        return 1;
+    }
+    printf("Attestation type: %s\n", attestation_type_str);
+
+    if (ret == -ENOENT || !strcmp(attestation_type_str, "none")) {
+        ra_tls_attest_lib = NULL;
+        ra_tls_create_key_and_crt_der_f = NULL;
+    } else if (!strcmp(attestation_type_str, "epid") || !strcmp(attestation_type_str, "dcap")) {
+        ra_tls_attest_lib = dlopen("libra_tls_attest.so", RTLD_LAZY);
+        if (!ra_tls_attest_lib) {
+            printf("User requested RA-TLS attestation but cannot find lib\n");
+            return 1;
+        }
+    } else {
+        printf("Unrecognized remote attestation type: %s\n", attestation_type_str);
+        return 1;
+    }
+
+    /* Certifier service integrated Attest/Verify */
+    bool cert_result = false;
+    std::string data_dir = "./server_data";
+
+    GramineCertifierFunctions gramineFuncs;
+    gramineFuncs.Attest = &Attest;
+    gramineFuncs.Verify = &Verify;
+    gramineFuncs.Seal = &Seal;
+    gramineFuncs.Unseal = &Unseal;
+
+    gramine_setup_certifier_functions(gramineFuncs);
+    printf("Invoking certifier...\n");
+
+    cert_result = certifier_init((char*)data_dir.c_str(), data_dir.size());
+    if (!cert_result) {
+        printf("certifier_init failed: result = %d\n", cert_result);
+        goto exit;
+    }
+
+    cert_result = cold_init();
+    if (!cert_result) {
+        printf("cold_init failed: result = %d\n", cert_result);
+        goto exit;
+    }
+
+    cert_result = certify_me();
+    if (!cert_result) {
+        printf("certify_me failed: result = %d\n", cert_result);
+        goto exit;
+    }
+
+    cert_result = setup_server_ssl();
+    if (!cert_result) {
+        printf("setup_ssl failed: result = %d\n", cert_result);
         goto exit;
     }
 
