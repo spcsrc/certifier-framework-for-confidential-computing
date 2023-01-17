@@ -47,4 +47,5 @@ sgx.allowed_files = [
   "file:/etc/group",
   "file:/etc/passwd",
   "file:/etc/gai.conf",
+  "file:server_data/store.bin",
 ]
