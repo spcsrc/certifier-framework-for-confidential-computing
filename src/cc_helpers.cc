@@ -792,6 +792,23 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
     ev->set_evidence_type("pem-cert-chain");
     ev->set_serialized_evidence(pem_cert_chain);
 #endif
+#ifdef GRAMINE_CERTIFIER
+  } else if (enclave_type_ == "gramine-enclave") {
+#if 0
+    extern string pem_cert_chain;
+    if (!cc_provider_provisioned_) {
+      printf("cc_trust_data::certify_me: Can't get pem-chain\n");
+      return false;
+    }
+    evidence* ev = platform_evidence.add_assertion();
+    if (ev ==nullptr) {
+      printf("cc_trust_data::certify_me: Can't add to platform evidence\n");
+      return false;
+    }
+    ev->set_evidence_type("pem-cert-chain");
+    ev->set_serialized_evidence(pem_cert_chain);
+#endif
+#endif
   } else {
     printf("cc_trust_data::certify_me: Unknown enclave type\n");
     return false;
@@ -845,6 +862,8 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
     request.set_submitted_evidence_type("sev-platform-attestation-only");
   } else if (enclave_type_ == "oe-enclave") {
     request.set_submitted_evidence_type("oe-evidence");
+  } else if (enclave_type_ == "gramine-enclave") {
+    request.set_submitted_evidence_type("gramine-evidence");
   } else {
     request.set_submitted_evidence_type("platform-attestation-only");
   }
