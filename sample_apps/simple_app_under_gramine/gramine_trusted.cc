@@ -49,7 +49,7 @@ static string measurement_file("./binary_trusted_measurements_file.bin");
 #define FLAGS_server_app_host "localhost"
 //#define FLAGS_server_app_port 8124
 #define FLAGS_server_app_port 39431
-static string data_dir = "./app1_data/";
+static string data_dir = "./server_data/";
 
 #define FLAGS_policy_store_file "store.bin"
 #define FLAGS_platform_file_name "platform_file.bin"
@@ -62,7 +62,7 @@ static std::string enclave_type;
 
 cc_trust_data* app_trust_data = nullptr;
 
-static bool simulator_initialized = false;
+static bool gramine_initialized = false;
 bool test_local_certify(string& enclave_type,
        bool init_from_file, string& file_name,
        string& evidence_descriptor);
@@ -142,11 +142,11 @@ bool gramine_local_certify() {
   string enclave_type("gramine-enclave");
   string evidence_descriptor("gramine-evidence");
   extern bool simulator_init(void);
-  if (!simulator_initialized) {
+  if (!gramine_initialized) {
     if (!simulator_init()) {
       return false;
     }
-    simulator_initialized = true;
+    gramine_initialized = true;
   }
 
   if (!test_local_certify(enclave_type,
@@ -157,7 +157,7 @@ bool gramine_local_certify() {
     return false;
   }
 
-  simulator_initialized = false;
+  gramine_initialized = false;
   return true;
 }
 
@@ -184,14 +184,14 @@ bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size) {
   data_dir =  usr_data + "/";
   printf("Using data_dir: %s\n", data_dir.c_str());
 
-  if (simulator_initialized) {
+  if (gramine_initialized) {
     return true;
   }
 
   SSL_library_init();
   printf("Done SSL init\n");
 
-  string enclave_type("simulated-enclave");
+  string enclave_type("gramine-enclave");
   string purpose("authentication");
 
   string store_file(data_dir);
@@ -209,8 +209,8 @@ bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size) {
     printf("Can't init policy key\n");
     return false;
   }
-
-  // Init simulated enclave
+#if 0
+  // Init gramine enclave
   string attest_key_file_name(data_dir);
   attest_key_file_name.append(FLAGS_attest_key_file);
   string platform_attest_file_name(data_dir);
@@ -225,8 +225,8 @@ bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size) {
     printf("Can't init simulated enclave\n");
     return false;
   }
-
-  simulator_initialized = true;
+#endif
+  gramine_initialized = true;
 
   return true;
 }
