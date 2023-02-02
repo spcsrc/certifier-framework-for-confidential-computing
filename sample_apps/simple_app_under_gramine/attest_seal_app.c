@@ -322,6 +322,7 @@ done:
     return status;
 }
 
+#if 0
 bool Attest(int claims_size, byte* claims, int* size_out, byte* out) {
     ssize_t bytes;
 
@@ -349,6 +350,60 @@ bool Attest(int claims_size, byte* claims, int* size_out, byte* out) {
     if (bytes < 0) {
         printf("Attest quote interface for user_data failed %d\n", errno);
         return false;
+    }
+
+    /* Copy out the assertion/quote */
+    memcpy(out, g_quote, bytes);
+    *size_out = bytes;
+    printf("Gramine Attest done\n");
+
+    return true;
+}
+#endif
+
+bool Attest(int claims_size, byte* claims, int* size_out, byte* out) {
+    ssize_t bytes;
+
+    printf("Attest quote interface, claims size: %d\n", claims_size);
+    print_bytes(claims_size, claims);
+
+    /* 1. read `my_target_info` file */
+    sgx_target_info_t target_info;
+    bytes = rw_file("/dev/attestation/my_target_info", (uint8_t*)&target_info,
+                    sizeof(target_info), false);
+    if (bytes != sizeof(target_info)) {
+        /* error is already printed by file_read_f() */
+        return FAILURE;
+    }
+
+    /* 2. write data from `my_target_info` to `target_info` file */
+    bytes = rw_file("/dev/attestation/target_info", (uint8_t*)&target_info, sizeof(target_info), true);
+    if (bytes != sizeof(target_info)) {
+        /* error is already printed by file_write_f() */
+        return FAILURE;
+    }
+
+    /* 3. write some custom data to `user_report_data` file */
+    sgx_report_data_t user_report_data = {0};
+
+    mbedtls_sha256(claims, claims_size, user_report_data.d, 0);
+
+    printf("Attest quote interface prep user_data size: %ld\n", sizeof(user_report_data));
+
+    bytes = rw_file("/dev/attestation/user_report_data", (uint8_t*)&user_report_data,
+                         sizeof(user_report_data), /*do_write=*/true);
+
+    if (bytes != sizeof(user_report_data)) {
+        printf("Attest prep user_data failed %d\n", errno);
+        return false;
+    }
+
+    /* 4. read `report` file */
+    sgx_report_t report;
+    bytes = rw_file("/dev/attestation/report", (uint8_t*)&report, sizeof(report), false);
+    if (bytes != sizeof(report)) {
+        /* error is already printed by file_read_f() */
+        return FAILURE;
     }
 
     /* Copy out the assertion/quote */
@@ -592,7 +647,7 @@ done:
     return status;
 }
 
-#if 0
+//#if 0
 int main(int argc, char** argv) {
     int ret;
     size_t len;
@@ -675,8 +730,8 @@ exit:
 
     return ret;
 }
-#endif
-
+//#endif
+#if 0
 int main(int argc, char** argv) {
     int ret;
     size_t len;
@@ -764,3 +819,4 @@ exit:
 
     return ret;
 }
+#endif
