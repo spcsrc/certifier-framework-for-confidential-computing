@@ -340,6 +340,80 @@ func AddNewFactsForOePlatformAttestation(publicPolicyKey *certprotos.KeyMessage,
 	return true
 }
 
+func AddNewFactsForGraminePlatformAttestation(publicPolicyKey *certprotos.KeyMessage, alreadyProved *certprotos.ProvedStatements) bool {
+        // At this point, the already_proved should be
+        //    "policyKey is-trusted"
+	//    "The platform-key says the enclave-key speaks-for the measurement"
+	// Add
+	//    "The policy-key says the measurement is-trusted"
+	//    "The policy-key says the platform-key is-trusted-for-attestation"
+	if len(alreadyProved.Proved) < 2 {
+		fmt.Printf("AddNewFactsForGramineEvidence, too few initial facts\n")
+		return false
+	}
+	mc := alreadyProved.Proved[1]
+	if mc.Subject == nil || mc.Verb == nil || mc.Clause == nil {
+		fmt.Printf("AddNewFactsForGramineEvidence, bad measurement evidence(1)\n")
+		return false
+	}
+	if mc.Clause.Object == nil {
+		fmt.Printf("AddNewFactsForGramineEvidence, bad measurement evidence (2)\n")
+		return false
+	}
+	if mc.Clause.Object.GetEntityType() != "measurement" {
+		fmt.Printf("AddNewFactsForGramineEvidence, bad measurement evidence (3)\n")
+		return false
+	}
+	prog_m := mc.Clause.Object.Measurement
+	if prog_m == nil {
+		fmt.Printf("AddNewFactsForGramineEvidence, bad measurement\n")
+		return false
+	}
+
+	// Get platformKey from  "The platform-key says the enclave-key speaks-for the measurement"
+	kc := alreadyProved.Proved[1]
+	if kc.Subject == nil || kc.Verb == nil || kc.Clause == nil {
+		fmt.Printf("AddNewFactsForGramineEvidence, bad platform evidence(1)\n")
+		return false
+	}
+	if kc.Subject.GetEntityType() != "key" {
+		fmt.Printf("AddNewFactsForGramineEvidence, bad platform evidence(2)\n")
+		return false
+	}
+	plat_key := kc.Subject.Key
+	if plat_key == nil {
+		fmt.Printf("AddNewFactsForGramineEvidence, bad platform key\n")
+		return false
+	}
+
+	signedPolicyKeySaysMeasurementIsTrusted := findPolicyFromMeasurement(prog_m)
+	if signedPolicyKeySaysMeasurementIsTrusted == nil {
+		fmt.Printf("AddNewFactsForGramineEvidence, can't find measurement policy\n")
+		fmt.Printf("    Measurement: ")
+		certlib.PrintBytes(prog_m)
+		fmt.Printf("\n")
+		return false
+	}
+
+	signedPolicyKeySaysPlatformKeyIsTrusted := findPolicyFromKey(plat_key)
+	if signedPolicyKeySaysPlatformKeyIsTrusted == nil {
+		fmt.Printf("AddNewFactsForGramineEvidence, can't find platform policy\n")
+		return false
+	}
+
+	if !AddFactFromSignedClaim(signedPolicyKeySaysMeasurementIsTrusted, alreadyProved) {
+		fmt.Printf("AddNewFactsForGramineEvidence, Couldn't AddFactFromSignedClaim, Error 1\n")
+		return false
+	}
+
+	if !AddFactFromSignedClaim(signedPolicyKeySaysPlatformKeyIsTrusted, alreadyProved) {
+		fmt.Printf("AddNewFactsForGramineEvidence, Couldn't AddFactFromSignedClaim, Error 2\n")
+		return false
+	}
+
+	return true
+}
+
 func AddNewFactsForSevEvidence(publicPolicyKey *certprotos.KeyMessage,
                 alreadyProved *certprotos.ProvedStatements) bool {
         // At this point, the already_proved should be
@@ -615,6 +689,120 @@ func ConstructProofFromOeEvidence(publicPolicyKey *certprotos.KeyMessage, purpos
 	measurementIsTrusted := policyKeySaysMeasurementIsTrusted.Clause
 	if measurementIsTrusted == nil {
 		fmt.Printf("ConstructProofFromOeEvidence: Can't get measurement\n")
+		return nil, nil
+	}
+	ps1 := certprotos.ProofStep {
+		S1: policyKeyIsTrusted,
+		S2: policyKeySaysMeasurementIsTrusted,
+		Conclusion: measurementIsTrusted,
+		RuleApplied: &r3,
+	}
+	proof.Steps = append(proof.Steps, &ps1)
+
+	ps2 := certprotos.ProofStep {
+		S1: policyKeyIsTrusted,
+		S2: policyKeySaysPlatformKeyIsTrustedForAttestation,
+		Conclusion: platformKeyIsTrustedForAttestation,
+		RuleApplied: &r3,
+	}
+	proof.Steps = append(proof.Steps, &ps2)
+
+	ps3 := certprotos.ProofStep {
+		S1: platformKeyIsTrustedForAttestation,
+		S2: platformSaysEnclaveKeySpeaksForMeasurement,
+		Conclusion: enclaveKeySpeaksForMeasurement,
+		RuleApplied: &r6,
+	}
+	proof.Steps = append(proof.Steps, &ps3)
+
+	// measurement is-trusted and enclaveKey speaks-for measurement -->
+	//	enclaveKey is-trusted-for-authentication (r1) or
+	//	enclaveKey is-trusted-for-attestation (r7)
+	if purpose == "authentication" {
+		ps4 := certprotos.ProofStep {
+			S1: measurementIsTrusted,
+			S2: enclaveKeySpeaksForMeasurement,
+			Conclusion: toProve,
+			RuleApplied: &r1,
+		}
+		proof.Steps = append(proof.Steps, &ps4)
+	} else {
+		ps4 := certprotos.ProofStep {
+			S1: measurementIsTrusted,
+			S2: enclaveKeySpeaksForMeasurement,
+			Conclusion: toProve,
+			RuleApplied: &r7,
+		}
+		proof.Steps = append(proof.Steps, &ps4)
+	}
+
+        return toProve, proof
+}
+
+// Returns toProve and proof steps
+func ConstructProofFromGramineEvidence(publicPolicyKey *certprotos.KeyMessage, purpose string, alreadyProved certprotos.ProvedStatements) (*certprotos.VseClause, *certprotos.Proof) {
+
+        // At this point, the evidence should be
+        //      "policyKey is-trusted"
+        //      "platform-key says enclaveKey speaks-for measurement
+        //      "policyKey says measurement is-trusted"
+        //      "policyKey says platformKey is-trusted-for-attestation"
+
+	// Debug
+	fmt.Printf("ConstructProofFromGramineEvidence, %d statements\n", len(alreadyProved.Proved))
+	for i := 0; i < len(alreadyProved.Proved);  i++ {
+		certlib.PrintVseClause(alreadyProved.Proved[i])
+		fmt.Printf("\n")
+	}
+
+	if len(alreadyProved.Proved) < 4 {
+		fmt.Printf("ConstructProofFromGramineEvidence: too few statements\n")
+		return nil, nil
+	}
+	policyKeyIsTrusted :=  alreadyProved.Proved[0]
+	platformSaysEnclaveKeySpeaksForMeasurement :=  alreadyProved.Proved[1]
+	if platformSaysEnclaveKeySpeaksForMeasurement.Clause == nil {
+		fmt.Printf("ConstructProofFromGramineEvidence: can't get enclaveKeySpeaksForMeasurement\n")
+		return nil, nil
+	}
+	enclaveKeySpeaksForMeasurement :=  platformSaysEnclaveKeySpeaksForMeasurement.Clause
+	policyKeySaysMeasurementIsTrusted :=  alreadyProved.Proved[2]
+	if policyKeyIsTrusted == nil || enclaveKeySpeaksForMeasurement == nil ||
+			policyKeySaysMeasurementIsTrusted == nil {
+		fmt.Printf("ConstructProofFromGramineEvidence: Error 4\n")
+		return nil, nil
+	}
+
+	policyKeySaysPlatformKeyIsTrustedForAttestation := alreadyProved.Proved[3]
+	if policyKeySaysPlatformKeyIsTrustedForAttestation.Clause == nil {
+		fmt.Printf("ConstructProofFromGramineEvidence: Can't get platformKeyIsTrustedForAttestation\n")
+		return nil, nil
+	}
+	platformKeyIsTrustedForAttestation := policyKeySaysPlatformKeyIsTrustedForAttestation.Clause
+
+        proof := &certprotos.Proof{}
+        r1 := int32(1)
+        r3 := int32(3)
+        r6 := int32(6)
+        r7 := int32(7)
+
+	enclaveKey := enclaveKeySpeaksForMeasurement.Subject
+	if enclaveKey == nil || enclaveKey.GetEntityType() != "key" {
+		fmt.Printf("ConstructProofFromGramineEvidence: Bad enclave key\n")
+		return nil, nil
+	}
+        var toProve *certprotos.VseClause = nil
+	if purpose == "authentication" {
+		verb := "is-trusted-for-authentication"
+		toProve = certlib.MakeUnaryVseClause(enclaveKey, &verb)
+	} else {
+		verb := "is-trusted-for-attestation"
+		toProve = certlib.MakeUnaryVseClause(enclaveKey, &verb)
+	}
+
+	measurementIsTrusted := policyKeySaysMeasurementIsTrusted.Clause
+	if measurementIsTrusted == nil {
+		fmt.Printf("ConstructProofFromGramineEvidence: Can't get measurement\n")
 		return nil, nil
 	}
 	ps1 := certprotos.ProofStep {
@@ -1068,6 +1256,8 @@ func ConstructProofFromRequest(evidenceType string, support *certprotos.Evidence
                         fmt.Printf("Cert\n")
                 } else if support.FactAssertion[i].GetEvidenceType() == "oe-attestation-report" {
                         fmt.Printf("oe-attestation-report\n")
+                } else if support.FactAssertion[i].GetEvidenceType() == "gramine-attestation-report" {
+                        fmt.Printf("gramine-attestation-report\n")
                 } else if support.FactAssertion[i].GetEvidenceType() == "sev-attestation" {
                         fmt.Printf("sev-attestation\n")
                 } else if support.FactAssertion[i].GetEvidenceType() == "pem-cert-chain" {
@@ -1092,7 +1282,7 @@ func ConstructProofFromRequest(evidenceType string, support *certprotos.Evidence
         fmt.Println("")
 
         // evidenceType should be "full-vse-support", "platform-attestation-only" or
-        //      "oe-evidence" or "sev-platform-attestation-only"
+        //      "oe-evidence" or "gramin-evidence" or "sev-platform-attestation-only"
         if evidenceType == "full-vse-support" {
         } else if evidenceType == "platform-attestation-only" {
                 if !AddNewFactsForAbbreviatedPlatformAttestation(publicPolicyKey, alreadyProved) {
@@ -1112,6 +1302,11 @@ func ConstructProofFromRequest(evidenceType string, support *certprotos.Evidence
         } else if evidenceType == "oe-evidence" {
                 if !AddNewFactsForOePlatformAttestation(publicPolicyKey, alreadyProved) {
                         fmt.Printf("AddNewFactsForOePlatformAttestation failed\n")
+                        return nil, nil, nil
+                }
+        } else if evidenceType == "gramine-evidence" {
+                if !AddNewFactsForGraminePlatformAttestation(publicPolicyKey, alreadyProved) {
+                        fmt.Printf("AddNewFactsForGraminePlatformAttestation failed\n")
                         return nil, nil, nil
                 }
         } else if evidenceType == "sev-platform-attestation-only" {
@@ -1153,6 +1348,12 @@ func ConstructProofFromRequest(evidenceType string, support *certprotos.Evidence
                 toProve, proof = ConstructProofFromOeEvidence(publicPolicyKey, purpose, *alreadyProved)
                 if toProve == nil {
                         fmt.Printf("ConstructProofFromOeEvidence failed\n")
+                        return nil, nil, nil
+                }
+        } else if evidenceType == "gramine-evidence" {
+                toProve, proof = ConstructProofFromGramineEvidence(publicPolicyKey, purpose, *alreadyProved)
+                if toProve == nil {
+                        fmt.Printf("ConstructProofFromGramineEvidence failed\n")
                         return nil, nil, nil
                 }
         } else {
