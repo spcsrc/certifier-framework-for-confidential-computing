@@ -406,14 +406,39 @@ bool Attest(int claims_size, byte* claims, int* size_out, byte* out) {
         return FAILURE;
     }
 
-    /* Copy out the assertion/quote */
-    memcpy(out, g_quote, bytes);
+    /* 2. read `quote` file */
+    bytes = rw_file("/dev/attestation/quote", (uint8_t*)&g_quote, sizeof(g_quote),
+		    /*do_write=*/false);
+    if (bytes < 0) {
+        printf("Attest quote interface for user_data failed %d\n", errno);
+        return false;
+    }
+
+    ///TEST
+    printf("\nREPORT BYTES:\n");
+    print_bytes(sizeof(sgx_report_t), (byte*)&report);
+    printf("\nREPORT BYTES KEY:\n");
+    print_bytes(sizeof(sgx_key_id_t), (byte*)&(report.key_id));
+    printf("\nREPORT BYTES MAC:\n");
+    print_bytes(sizeof(sgx_mac_t), (byte*)&(report.mac));
+
+    sgx_quote_body_t* quote_body_received = (sgx_quote_body_t*)g_quote;
+    printf("\nQUOTE BYTES:\n");
+    print_bytes(sizeof(g_quote), (byte*)quote_body_received->report_body);
+    ///TEST
+
+    sgx_report_t sgx_report;
+    memcpy(&(sgx_report.key_id_, report
+
+    /* Copy out the assertion/report */
+    memcpy(out, &report, bytes);
     *size_out = bytes;
     printf("Gramine Attest done\n");
 
     return true;
 }
 
+#if 0
 bool Verify(int user_data_size, byte* user_data, int assertion_size, byte *assertion, int* size_out, byte* out) {
     ssize_t bytes;
     int ret = -1;
@@ -480,6 +505,92 @@ bool Verify(int user_data_size, byte* user_data, int assertion_size, byte *asser
     memcpy(out, quote_body_expected->report_body.mr_signer.m, SGX_QUOTE_SIZE);
     *size_out = SGX_QUOTE_SIZE;
 
+    printf("\nGramine verify quote interface compare done, output: \n");
+    print_bytes(*size_out, out);
+    printf("\n");
+
+    return true;
+}
+#endif
+
+bool Verify(int user_data_size, byte* user_data, int assertion_size, byte *assertion, int* size_out, byte* out) {
+    ssize_t bytes;
+    int ret = -1;
+
+    printf("Gramine Verify called user_data_size: %d assertion_size: %d\n",
+           user_data_size, assertion_size);
+#if 0
+    /* 1. write some custom data to `user_report_data` file */
+    sgx_report_data_t user_report_data = {0};
+
+    /* Get a SHA256 of user_data */
+    mbedtls_sha256(user_data, user_data_size, user_report_data.d, 0);
+
+    bytes = rw_file("/dev/attestation/user_report_data", (uint8_t*)&user_report_data,
+                    sizeof(user_report_data), /*do_write=*/true);
+    if (bytes != sizeof(user_report_data)) {
+        printf("Verify prep user_data failed %d\n", errno);
+        return false;
+    }
+
+    /* 2. read `quote` file */
+    bytes = rw_file("/dev/attestation/quote", (uint8_t*)&g_quote, sizeof(g_quote),
+		    /*do_write=*/false);
+    if (bytes < 0) {
+        printf("Verify quote interface for user_data failed %d\n", errno);
+        return false;
+    }
+
+    //sgx_quote_body_t* quote_body_expected = (sgx_quote_body_t*)assertion;
+#endif
+    sgx_report_t* report_expected = (sgx_report_t*)assertion;
+
+    size_t quote_body_received_len = 0;
+#if 0
+    ret = retrieve_quote(NULL, false, report_expected, NULL, &quote_body_received, &quote_body_received_len); 
+    if (ret) {
+        printf("retrieve_quote failed: %d\n", ret);
+        return false;
+    }
+#endif
+
+#if 0
+    if (quote_body_expected->version != /*EPID*/2 && quote_body_expected->version != /*DCAP*/3) {
+        printf("version of SGX quote is not EPID (2) and not ECDSA/DCAP (3)\n");
+        return false;
+    }
+
+    /* Compare user report and actual report */
+    printf("Comparing user report data in SGX report size: %ld\n",
+           sizeof(report_expected->body.report_data.d));
+
+    ret = memcmp(quote_body_received->report_body.report_data.d, user_report_data.d,
+                 sizeof(user_report_data));
+    if (ret) {
+        printf("comparison of user report data in SGX report failed\n");
+        return false;
+    }
+
+
+    /* Compare expected and actual report */
+    printf("Comparing report data in SGX report size: %ld\n",
+           sizeof(report_expected->body.report_data.d));
+
+    ret = memcmp(report_expected->body.report_data.d,
+                 quote_body_received->report_body.report_data.d,
+                 sizeof(report_expected->body.report_data.d));
+    if (ret) {
+        printf("comparison of quote report data in SGX quote failed\n");
+        return false;
+    }
+
+    printf("\nGramine verify quote interface mr_enclave: ");
+    print_bytes(SGX_QUOTE_SIZE, report_expected->body.mr_enclave.m);
+
+    /* Copy out quote info */
+    memcpy(out, report_expected->body.mr_signer.m, SGX_QUOTE_SIZE);
+    *size_out = SGX_QUOTE_SIZE;
+#endif
     printf("\nGramine verify quote interface compare done, output: \n");
     print_bytes(*size_out, out);
     printf("\n");
