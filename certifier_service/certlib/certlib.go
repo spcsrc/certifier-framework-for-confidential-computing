@@ -1460,6 +1460,8 @@ func PrintEvidence(ev *certprotos.Evidence) {
 		PrintSignedReport(&sr)
 	} else if ev.GetEvidenceType() == "oe-attestation-report" {
 		PrintBytes(ev.SerializedEvidence)
+	} else if ev.GetEvidenceType() == "gramine-attestation-report" {
+		PrintBytes(ev.SerializedEvidence)
 	} else if ev.GetEvidenceType() == "sev-attestation" {
 		PrintBytes(ev.SerializedEvidence)
 	} else {
@@ -1815,6 +1817,41 @@ func InitProvedStatements(pk certprotos.KeyMessage, evidenceList []*certprotos.E
 			}
 			// Get platform key from pem file
 			stripped := StripPemHeaderAndTrailer(string(evidenceList[i-1].SerializedEvidence))
+			if stripped == nil {
+				fmt.Printf("InitProvedStatements: Bad PEM\n")
+				return false
+			}
+			k := KeyFromPemFormat(*stripped)
+			cl := ConstructSevSpeaksForStatement(k, ud.EnclaveKey, m)
+			if cl == nil {
+				fmt.Printf("InitProvedStatements: ConstructEnclaveKeySpeaksForMeasurement failed\n")
+				return false
+			}
+			ps.Proved = append(ps.Proved, cl)
+		} else if ev.GetEvidenceType() == "gramine-attestation-report" {
+			// call gramineVerify here and construct the statement:
+			//      enclave-key speaks-for measurement
+			// from the return values.  Then add it to proved statements
+			/*
+			if i < 1  || evidenceList[i-1].GetEvidenceType() != "pem-cert-chain" {
+				fmt.Printf("InitProvedStatements: missing cert chain in gramine evidence\n")
+				return false
+			}
+			*/
+			// TODO: Fix this to gramine
+			serializedUD, m, err  := oeverify.OEHostVerifyEvidence(evidenceList[i].SerializedEvidence,
+				evidenceList[i-1].SerializedEvidence)
+			if err != nil || serializedUD == nil || m == nil {
+				return false
+			}
+			ud := certprotos.AttestationUserData{}
+			err = proto.Unmarshal(serializedUD, &ud)
+			if err != nil {
+				return false
+			}
+			// Get platform key from pem file
+			//stripped := StripPemHeaderAndTrailer(string(evidenceList[i-1].SerializedEvidence))
+			stripped := StripPemHeaderAndTrailer(string(evidenceList[i-2].SerializedEvidence))
 			if stripped == nil {
 				fmt.Printf("InitProvedStatements: Bad PEM\n")
 				return false
@@ -2324,6 +2361,8 @@ func PrintTrustRequest(req *certprotos.TrustRequestMessage) {
 				}
 				PrintSignedClaim(&signedClaimMsg)
 			} else if req.Support.FactAssertion[i].GetEvidenceType() == "oe_evidence" {
+				PrintBytes(req.Support.FactAssertion[i].GetSerializedEvidence())
+			} else if req.Support.FactAssertion[i].GetEvidenceType() == "gramine_evidence" {
 				PrintBytes(req.Support.FactAssertion[i].GetSerializedEvidence())
 			}
 			fmt.Printf("\n")
