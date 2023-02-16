@@ -41,9 +41,12 @@
 #include "mbedtls/ctr_drbg.h"
 
 // SGX includes
+//#include "quote.h"
 #include "sgx_arch.h"
 #include "sgx_attest.h"
 #include "enclave_api.h"
+//#include "sgx_dcap_quoteverify.h"
+#include "ra_tls.h"
 
 #include "gramine_trusted.h"
 
@@ -439,6 +442,256 @@ bool Attest(int claims_size, byte* claims, int* size_out, byte* out) {
 }
 #endif
 
+/* QL stands for Quoting Library; QV stands for Quote Verification */
+#define SGX_QL_QV_MK_ERROR(x) (0x0000A000 | (x))
+typedef enum _sgx_ql_qv_result_t {
+    /* quote verification passed and is at the latest TCB level */
+    SGX_QL_QV_RESULT_OK = 0x0000,
+    /* quote verification passed and the platform is patched to the latest TCB level but additional
+     * configuration of the SGX platform may be needed */
+    SGX_QL_QV_RESULT_CONFIG_NEEDED = SGX_QL_QV_MK_ERROR(0x0001),
+    /* quote is good but TCB level of the platform is out of date; platform needs patching to be at
+     * the latest TCB level */
+    SGX_QL_QV_RESULT_OUT_OF_DATE = SGX_QL_QV_MK_ERROR(0x0002),
+    /* quote is good but the TCB level of the platform is out of date and additional configuration
+     * of the SGX platform at its current patching level may be needed; platform needs patching to
+     * be at the latest TCB level */
+    SGX_QL_QV_RESULT_OUT_OF_DATE_CONFIG_NEEDED = SGX_QL_QV_MK_ERROR(0x0003),
+    /* signature over the application report is invalid */
+    SGX_QL_QV_RESULT_INVALID_SIGNATURE = SGX_QL_QV_MK_ERROR(0x0004),
+    /* attestation key or platform has been revoked */
+    SGX_QL_QV_RESULT_REVOKED = SGX_QL_QV_MK_ERROR(0x0005),
+    /* quote verification failed due to an error in one of the input */
+    SGX_QL_QV_RESULT_UNSPECIFIED = SGX_QL_QV_MK_ERROR(0x0006),
+    /* TCB level of the platform is up to date, but SGX SW hardening is needed */
+    SGX_QL_QV_RESULT_SW_HARDENING_NEEDED = SGX_QL_QV_MK_ERROR(0x0007),
+    /* TCB level of the platform is up to date, but additional configuration of the platform at its
+     * current patching level may be needed; moreover, SGX SW hardening is also needed */
+    SGX_QL_QV_RESULT_CONFIG_AND_SW_HARDENING_NEEDED = SGX_QL_QV_MK_ERROR(0x0008),
+} sgx_ql_qv_result_t;
+
+#define RA_TLS_ALLOW_OUTDATED_TCB_INSECURE  "RA_TLS_ALLOW_OUTDATED_TCB_INSECURE"
+#define RA_TLS_ALLOW_DEBUG_ENCLAVE_INSECURE "RA_TLS_ALLOW_DEBUG_ENCLAVE_INSECURE"
+
+bool getenv_allow_outdated_tcb(void) {
+    char* str = getenv(RA_TLS_ALLOW_OUTDATED_TCB_INSECURE);
+    return (str && !strcmp(str, "1"));
+}
+
+bool getenv_allow_debug_enclave(void) {
+    char* str = getenv(RA_TLS_ALLOW_DEBUG_ENCLAVE_INSECURE);
+    return (str && !strcmp(str, "1"));
+}
+
+#if 0
+extern int sgx_qv_get_quote_supplemental_data_size(uint32_t* p_data_size);
+extern int sgx_qv_verify_quote(const uint8_t* p_quote, uint32_t quote_size, void* p_quote_collateral,
+                        const time_t expiration_check_date,
+                        uint32_t* p_collateral_expiration_status,
+                        sgx_ql_qv_result_t* p_quote_verification_result, void* p_qve_report_info,
+                        uint32_t supplemental_data_size, uint8_t* p_supplemental_data);
+
+extern int ra_tls_verify_callback(void* data, mbedtls_x509_crt* crt, int depth, uint32_t* flags);
+#endif
+
+static const char* sgx_ql_qv_result_to_str(sgx_ql_qv_result_t verification_result) {
+    switch (verification_result) {
+        case SGX_QL_QV_RESULT_OK:
+            return "OK";
+        case SGX_QL_QV_RESULT_CONFIG_NEEDED:
+            return "CONFIG_NEEDED";
+        case SGX_QL_QV_RESULT_OUT_OF_DATE:
+            return "OUT_OF_DATE";
+        case SGX_QL_QV_RESULT_OUT_OF_DATE_CONFIG_NEEDED:
+            return "OUT_OF_DATE_CONFIG_NEEDED";
+        case SGX_QL_QV_RESULT_SW_HARDENING_NEEDED:
+            return "SW_HARDENING_NEEDED";
+        case SGX_QL_QV_RESULT_CONFIG_AND_SW_HARDENING_NEEDED:
+            return "CONFIG_AND_SW_HARDENING_NEEDED";
+        case SGX_QL_QV_RESULT_INVALID_SIGNATURE:
+            return "INVALID_SIGNATURE";
+        case SGX_QL_QV_RESULT_REVOKED:
+            return "REVOKED";
+        case SGX_QL_QV_RESULT_UNSPECIFIED:
+            return "UNSPECIFIED";
+    }
+    return "<unrecognized error>";
+}
+
+int verify_quote_body_enclave_attributes(sgx_quote_body_t* quote_body, bool allow_debug_enclave) {
+    if (!allow_debug_enclave && (quote_body->report_body.attributes.flags & SGX_FLAGS_DEBUG)) {
+        printf("Quote: DEBUG bit in enclave attributes is set\n");
+        return -1;
+    }
+
+    /* sanity check: enclave must be initialized */
+    if (!(quote_body->report_body.attributes.flags & SGX_FLAGS_INITIALIZED)) {
+        printf("Quote: INIT bit in enclave attributes is not set\n");
+        return -1;
+    }
+
+    /* sanity check: enclave must not have provision/EINIT token key */
+    if ((quote_body->report_body.attributes.flags & SGX_FLAGS_PROVISION_KEY) ||
+            (quote_body->report_body.attributes.flags & SGX_FLAGS_LICENSE_KEY)) {
+        printf("Quote: PROVISION_KEY or LICENSE_KEY bit in enclave attributes is set\n");
+        return -1;
+    }
+
+    /* currently only support 64-bit enclaves */
+    if (!(quote_body->report_body.attributes.flags & SGX_FLAGS_MODE64BIT)) {
+        printf("Quote: MODE64 bit in enclave attributes is not set\n");
+        return -1;
+    }
+
+    printf("Quote: enclave attributes OK\n");
+
+    return 0;
+}
+
+int (*ra_tls_verify_callback_der_f)(uint8_t* der_crt, size_t der_crt_size);
+int (*sgx_qv_get_quote_supplemental_data_size)(uint32_t *p_data_size);
+
+int (*sgx_qv_verify_quote)(const uint8_t* p_quote, uint32_t quote_size, void* p_quote_collateral,
+                        const time_t expiration_check_date,
+                        uint32_t* p_collateral_expiration_status,
+                        sgx_ql_qv_result_t* p_quote_verification_result, void* p_qve_report_info,
+                        uint32_t supplemental_data_size, uint8_t* p_supplemental_data);
+
+
+int verify_quote(sgx_quote_t* quote) {
+    int ret = -1;
+    size_t quote_size = sizeof(*quote);
+    uint8_t* supplemental_data      = NULL;
+    uint32_t supplemental_data_size = 0;
+
+    /* prepare user-supplied verification parameters "allow outdated TCB"/"allow debug enclave" */
+    bool allow_outdated_tcb  = getenv_allow_outdated_tcb();
+    bool allow_debug_enclave = getenv_allow_debug_enclave();
+
+    sgx_quote_body_t* quote_body = &quote->body;
+    uint32_t collateral_expiration_status  = 1;
+    sgx_ql_qv_result_t verification_result = SGX_QL_QV_RESULT_UNSPECIFIED;
+    void* ra_tls_verify_lib           = NULL;
+    void* sgx_verify_lib           = NULL;
+    ra_tls_verify_callback_der_f      = NULL;
+
+    time_t current_time = time(NULL);
+    if (current_time == ((time_t)-1)) {
+        ret = MBEDTLS_ERR_X509_FATAL_ERROR;
+        goto out;
+    }
+#if 0
+    /* call into libsgx_dcap_quoteverify to get supplemental data size */
+    ret = sgx_qv_get_quote_supplemental_data_size(&supplemental_data_size);
+    if (ret) {
+        ret = MBEDTLS_ERR_X509_FATAL_ERROR;
+        goto out;
+    }
+
+    supplemental_data = (uint8_t*)malloc(supplemental_data_size);
+    if (!supplemental_data) {
+        ret = MBEDTLS_ERR_X509_ALLOC_FAILED;
+        goto out;
+    }
+
+    /* call into libsgx_dcap_quoteverify to verify ECDSA-based SGX quote */
+    ret = sgx_qv_verify_quote((uint8_t*)quote, (uint32_t)quote_size, /*p_quote_collateral=*/NULL,
+                              current_time, &collateral_expiration_status, &verification_result,
+                              /*p_qve_report_info=*/NULL, supplemental_data_size,
+                              supplemental_data);
+    if (ret) {
+        ret = MBEDTLS_ERR_X509_CERT_VERIFY_FAILED;
+        goto out;
+    }
+#endif
+    sgx_verify_lib = dlopen("libsgx_dcap_quoteverify.so", RTLD_LAZY);
+    sgx_qv_get_quote_supplemental_data_size = (int(*)(uint32_t*))dlsym(sgx_verify_lib, "sgx_qv_get_quote_supplemental_data_size");
+    ret = sgx_qv_get_quote_supplemental_data_size(&supplemental_data_size);
+    printf("Function address called: %p\n", sgx_qv_get_quote_supplemental_data_size);
+    printf("Supplemental data size: %d\n", supplemental_data_size);
+
+    sgx_qv_verify_quote = (int(*)(const uint8_t*, uint32_t, void*,
+                        const time_t,
+                        uint32_t*,
+                        sgx_ql_qv_result_t*, void*,
+                        uint32_t, uint8_t*))dlsym(sgx_verify_lib, "sgx_qv_verify_quote");
+    printf("Verify function address to be called: %p\n", sgx_qv_verify_quote);
+    ret = sgx_qv_verify_quote((uint8_t*)quote, (uint32_t)quote_size, /*p_quote_collateral=*/NULL,
+                              current_time, &collateral_expiration_status, &verification_result,
+                              /*p_qve_report_info=*/NULL, supplemental_data_size,
+                              supplemental_data);
+#if 0
+    if (ret) {
+        ret = MBEDTLS_ERR_X509_CERT_VERIFY_FAILED;
+        printf("Quote: verify failed: %d\n", ret);
+        goto out;
+    }
+#endif
+#if 0
+    // WORKS
+    ra_tls_verify_lib = dlopen("libra_tls_verify_dcap.so", RTLD_LAZY);
+
+    ra_tls_verify_callback_der_f = (int(*)(uint8_t*,size_t))(dlsym(ra_tls_verify_lib, "ra_tls_verify_callback_der"));
+
+    printf("Function address to be called: %p\n", ra_tls_verify_callback_der_f);
+    ret = ra_tls_verify_callback_der_f((uint8_t*)quote, (size_t)supplemental_data_size);
+#endif
+    switch (verification_result) {
+        case SGX_QL_QV_RESULT_OK:
+            if (collateral_expiration_status != 0) {
+                printf("WARNING: The collateral is out of date.\n");
+            }
+            ret = 0;
+            break;
+        case SGX_QL_QV_RESULT_CONFIG_NEEDED:
+        case SGX_QL_QV_RESULT_OUT_OF_DATE:
+        case SGX_QL_QV_RESULT_OUT_OF_DATE_CONFIG_NEEDED:
+        case SGX_QL_QV_RESULT_SW_HARDENING_NEEDED:
+        case SGX_QL_QV_RESULT_CONFIG_AND_SW_HARDENING_NEEDED:
+            ret = allow_outdated_tcb ? 0 : MBEDTLS_ERR_X509_CERT_VERIFY_FAILED;
+            break;
+        case SGX_QL_QV_RESULT_INVALID_SIGNATURE:
+        case SGX_QL_QV_RESULT_REVOKED:
+        case SGX_QL_QV_RESULT_UNSPECIFIED:
+        default:
+            ret = MBEDTLS_ERR_X509_CERT_VERIFY_FAILED;
+            break;
+    }
+    if (ret < 0) {
+        printf("Quote: verification failed with error %s\n",
+               sgx_ql_qv_result_to_str(verification_result));
+        goto out;
+    }
+
+    /* verify enclave attributes from the SGX quote body */
+    ret = verify_quote_body_enclave_attributes(quote_body, allow_debug_enclave);
+    if (ret < 0) {
+        ret = MBEDTLS_ERR_X509_CERT_VERIFY_FAILED;
+        goto out;
+    }
+#if 0
+    /* verify other relevant enclave information from the SGX quote */
+    if (g_verify_measurements_cb) {
+        /* use user-supplied callback to verify measurements */
+        ret = g_verify_measurements_cb((const char*)&quote_body->report_body.mr_enclave,
+                                       (const char*)&quote_body->report_body.mr_signer,
+                                       (const char*)&quote_body->report_body.isv_prod_id,
+                                       (const char*)&quote_body->report_body.isv_svn);
+    } else {
+        /* use default logic to verify measurements */
+        ret = verify_quote_body_against_envvar_measurements(quote_body);
+    }
+    if (ret < 0) {
+        ret = MBEDTLS_ERR_X509_CERT_VERIFY_FAILED;
+        goto out;
+    }
+#endif
+
+out:
+    free(supplemental_data);
+    return ret;
+}
+
 bool Verify(int user_data_size, byte* user_data, int assertion_size, byte *assertion, int* size_out, byte* out) {
     ssize_t bytes;
     int ret = -1;
@@ -500,6 +753,14 @@ bool Verify(int user_data_size, byte* user_data, int assertion_size, byte *asser
 
     printf("\nGramine verify quote interface mr_enclave: ");
     print_bytes(SGX_QUOTE_SIZE, quote_expected->body.report_body.mr_enclave.m);
+
+
+    /* Invoke remote verify_quote() */
+    printf("\nGramine begin remote verify quote\n");
+    if (verify_quote(quote_expected) == false) {
+        return false;
+    }
+
 
     /* Copy out quote info */
     memcpy(out, quote_expected->body.report_body.mr_signer.m, SGX_QUOTE_SIZE);
