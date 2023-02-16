@@ -19,11 +19,11 @@ RA_CLIENT_LINKABLE ?= 0
 all: app epid  # by default, only build EPID because it doesn't rely on additional (DCAP) libs
 
 .PHONY: app
-app: ssl/attest_seal_app.crt mbedtls/.mbedtls_configured attest_seal_app.manifest.sgx attest_seal_app.sig attest_seal_app.token
+app: ssl/attest_seal_app.crt mbedtls/.mbedtls_configured attest_seal_app.sig attest_seal_app.token
 
 .PHONY: dcap
 #dcap: client_dcap.manifest.sgx client_dcap.sig client_dcap.token
-dcap:
+dcap: attest_seal_app.manifest.sgx attest_seal_app.sig attest_seal_app.token
 
 ############################# SSL DATA DEPENDENCY #############################
 
@@ -55,7 +55,8 @@ MBED_BUILD_TYPE=Release
 endif
 
 GRAMINE_SRC_PATH = ../../../gramine/gramine
-SGX_INCLUDE = -I$(GRAMINE_SRC_PATH)/pal/src/host/linux-sgx
+SGX_INCLUDE = -I$(GRAMINE_SRC_PATH)/pal/src/host/linux-sgx -I$(GRAMINE_SRC_PATH)/tools/sgx/ra-tls
+SGX_LDFLAGS = -Wl,--enable-new-dtags $(shell pkg-config --libs sgx_util)
 
 $(MBEDTLS_SRC):
 	$(GRAMINE_SRC_PATH)/CI-Examples/common_tools/download --output $@ $(foreach mirror,$(MBEDTLS_URI),--url $(mirror)/$(MBEDTLS_SRC)) --sha256 $(MBEDTLS_HASH)
@@ -98,7 +99,7 @@ certifier:
 
 # TODO: use `$(shell pkg-config --cflags mbedtls_gramine)` instead of local mbedtls includes
 CFLAGS += -I./mbedtls/include $(SGX_INCLUDE) $(CERTIFIER_CFLAGS)
-LDFLAGS += -ldl -Wl,--enable-new-dtags $(shell pkg-config --libs mbedtls_gramine) -L/usrl/local/lib -L./ -lcertifier $(CERTIFIER_LDFLAGS)
+LDFLAGS += -ldl -Wl,--enable-new-dtags $(shell pkg-config --libs mbedtls_gramine) -L/usrl/local/lib -L./ -lcertifier $(CERTIFIER_LDFLAGS) $(SGX_LDFLAGS)
 
 attest_seal_app: attest_seal_app.c certifier mbedtls/.mbedtls_configured
 	#$(CC) $< $(CFLAGS) $(LDFLAGS) -o $@
