@@ -549,6 +549,7 @@ int verify_quote_body_enclave_attributes(sgx_quote_body_t* quote_body, bool allo
 }
 
 int (*ra_tls_verify_callback_der_f)(uint8_t* der_crt, size_t der_crt_size);
+int (*gramine_verify_quote_f)(uint8_t* quote, size_t quote_size);
 int (*sgx_qv_get_quote_supplemental_data_size)(uint32_t *p_data_size);
 
 int (*sgx_qv_verify_quote)(const uint8_t* p_quote, uint32_t quote_size, void* p_quote_collateral,
@@ -560,7 +561,8 @@ int (*sgx_qv_verify_quote)(const uint8_t* p_quote, uint32_t quote_size, void* p_
 
 int verify_quote(sgx_quote_t* quote) {
     int ret = -1;
-    size_t quote_size = sizeof(*quote);
+    //size_t quote_size = sizeof(*quote);
+    size_t quote_size = SGX_QUOTE_MAX_SIZE;
     uint8_t* supplemental_data      = NULL;
     uint32_t supplemental_data_size = 0;
 
@@ -607,23 +609,36 @@ int verify_quote(sgx_quote_t* quote) {
     sgx_verify_lib = dlopen("libsgx_dcap_quoteverify.so", RTLD_LAZY);
     sgx_qv_get_quote_supplemental_data_size = (int(*)(uint32_t*))dlsym(sgx_verify_lib, "sgx_qv_get_quote_supplemental_data_size");
     ret = sgx_qv_get_quote_supplemental_data_size(&supplemental_data_size);
-    printf("Function address called: %p\n", sgx_qv_get_quote_supplemental_data_size);
+    printf("Function address to be called: %p\n", sgx_qv_get_quote_supplemental_data_size);
+    if (ret != 0) {
+        printf("Quote: supplemental data failed: %d\n", ret);
+        goto out;
+    }
     printf("Supplemental data size: %d\n", supplemental_data_size);
+
+    supplemental_data = (uint8_t*)malloc(supplemental_data_size);
+    if (!supplemental_data) {
+        ret = MBEDTLS_ERR_X509_ALLOC_FAILED;
+        goto out;
+    }
 
     sgx_qv_verify_quote = (int(*)(const uint8_t*, uint32_t, void*,
                         const time_t,
                         uint32_t*,
                         sgx_ql_qv_result_t*, void*,
                         uint32_t, uint8_t*))dlsym(sgx_verify_lib, "sgx_qv_verify_quote");
-    printf("Verify function address to be called: %p\n", sgx_qv_verify_quote);
+    printf("Verify function address to be called: %p with size: %ld\n",
+		    sgx_qv_verify_quote, quote_size);
+    //print_bytes(quote_size, (byte*)quote);
+#if 0 
+    current_time = time(NULL);
     ret = sgx_qv_verify_quote((uint8_t*)quote, (uint32_t)quote_size, /*p_quote_collateral=*/NULL,
                               current_time, &collateral_expiration_status, &verification_result,
                               /*p_qve_report_info=*/NULL, supplemental_data_size,
                               supplemental_data);
-#if 0
-    if (ret) {
-        ret = MBEDTLS_ERR_X509_CERT_VERIFY_FAILED;
+    if (ret != 0) {
         printf("Quote: verify failed: %d\n", ret);
+        ret = MBEDTLS_ERR_X509_CERT_VERIFY_FAILED;
         goto out;
     }
 #endif
@@ -636,6 +651,14 @@ int verify_quote(sgx_quote_t* quote) {
     printf("Function address to be called: %p\n", ra_tls_verify_callback_der_f);
     ret = ra_tls_verify_callback_der_f((uint8_t*)quote, (size_t)supplemental_data_size);
 #endif
+
+    ra_tls_verify_lib = dlopen("libra_tls_verify_dcap.so", RTLD_LAZY);
+
+    gramine_verify_quote_f = (int(*)(uint8_t*,size_t))(dlsym(ra_tls_verify_lib, "gramine_verify_quote"));
+
+    printf("New Function address to be called: %p\n", gramine_verify_quote_f);
+    ret = gramine_verify_quote_f((uint8_t*)quote, (size_t) quote_size);
+
     switch (verification_result) {
         case SGX_QL_QV_RESULT_OK:
             if (collateral_expiration_status != 0) {
@@ -757,7 +780,7 @@ bool Verify(int user_data_size, byte* user_data, int assertion_size, byte *asser
 
     /* Invoke remote verify_quote() */
     printf("\nGramine begin remote verify quote\n");
-    if (verify_quote(quote_expected) == false) {
+    if (verify_quote(quote_received) == false) {
         return false;
     }
 
