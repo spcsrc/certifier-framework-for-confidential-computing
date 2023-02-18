@@ -16,14 +16,13 @@ RA_CLIENT_SPID ?=
 RA_CLIENT_LINKABLE ?= 0
 
 .PHONY: all
-all: app epid  # by default, only build EPID because it doesn't rely on additional (DCAP) libs
+all: app
 
 .PHONY: app
-app: ssl/attest_seal_app.crt mbedtls/.mbedtls_configured attest_seal_app.sig attest_seal_app.token
+app: ssl/attest_seal_app.crt mbedtls/.mbedtls_configured attest_seal_app_dcap.manifest.sgx attest_seal_app_dcap.sig attest_seal_app_dcap.token attest_seal_app
 
-.PHONY: dcap
-#dcap: client_dcap.manifest.sgx client_dcap.sig client_dcap.token
-dcap: attest_seal_app.manifest.sgx attest_seal_app.sig attest_seal_app.token
+#.PHONY: dcap
+#dcap: attest_seal_app_dcap.manifest.sgx attest_seal_app_dcap.sig attest_seal_app_dcap.token
 
 ############################# SSL DATA DEPENDENCY #############################
 
@@ -34,6 +33,11 @@ ssl/attest_seal_app.crt: ssl/ca_config.conf
 	openssl genrsa -out ssl/attest_seal_app.key 2048
 	openssl req -new -key ssl/attest_seal_app.key -out ssl/attest_seal_app.csr -config ssl/ca_config.conf
 	openssl x509 -req -days 360 -in ssl/attest_seal_app.csr -CA ssl/ca.crt -CAkey ssl/ca.key -CAcreateserial -out ssl/attest_seal_app.crt
+
+######################### GRAMINE/SGX VARIABLES ###############################
+GRAMINE_SRC_PATH = ../../../gramine/gramine
+SGX_INCLUDE = -I$(GRAMINE_SRC_PATH)/pal/src/host/linux-sgx -I$(GRAMINE_SRC_PATH)/tools/sgx/ra-tls
+SGX_LDFLAGS = -Wl,--enable-new-dtags $(shell pkg-config --libs sgx_util)
 
 ############################# MBEDTLS DEPENDENCY ##############################
 
@@ -54,10 +58,6 @@ else
 MBED_BUILD_TYPE=Release
 endif
 
-GRAMINE_SRC_PATH = ../../../gramine/gramine
-SGX_INCLUDE = -I$(GRAMINE_SRC_PATH)/pal/src/host/linux-sgx -I$(GRAMINE_SRC_PATH)/tools/sgx/ra-tls
-SGX_LDFLAGS = -Wl,--enable-new-dtags $(shell pkg-config --libs sgx_util)
-
 $(MBEDTLS_SRC):
 	$(GRAMINE_SRC_PATH)/CI-Examples/common_tools/download --output $@ $(foreach mirror,$(MBEDTLS_URI),--url $(mirror)/$(MBEDTLS_SRC)) --sha256 $(MBEDTLS_HASH)
 
@@ -72,19 +72,19 @@ mbedtls/.mbedtls_configured: mbedtls/.mbedtls_downloaded
 	cd mbedtls && ./scripts/config.pl set MBEDTLS_CMAC_C MBEDTLS_ERROR_C
 	touch $@
 
-######################### CERTIFIER ###########################
+######################### CERTIFIER LIBRARY ###################################
 CERTIFIER_SRC_PATH = ../../src
 
 .SECONDARY: certifier
 CERTIFIER_SRC = $(CERTIFIER_SRC_PATH)/certifier.cc             \
                 $(CERTIFIER_SRC_PATH)/support.cc               \
-		$(CERTIFIER_SRC_PATH)/simulated_enclave.cc     \
-		$(CERTIFIER_SRC_PATH)/application_enclave.cc   \
-		$(CERTIFIER_SRC_PATH)/cc_helpers.cc            \
-		$(CERTIFIER_SRC_PATH)/test_support.cc          \
-		$(CERTIFIER_SRC_PATH)/gramine/gramine_api.cc   \
-		$(CERTIFIER_SRC_PATH)/certifier.pb.cc          \
-		$(CERTIFIER_SRC_PATH)/../sample_apps/simple_app_under_gramine/gramine_trusted.cc \
+                $(CERTIFIER_SRC_PATH)/simulated_enclave.cc     \
+                $(CERTIFIER_SRC_PATH)/application_enclave.cc   \
+                $(CERTIFIER_SRC_PATH)/cc_helpers.cc            \
+                $(CERTIFIER_SRC_PATH)/test_support.cc          \
+                $(CERTIFIER_SRC_PATH)/gramine/gramine_api.cc   \
+                $(CERTIFIER_SRC_PATH)/certifier.pb.cc          \
+                $(CERTIFIER_SRC_PATH)/../sample_apps/simple_app_under_gramine/gramine_trusted.cc \
 
 CERTIFIER_INCLUDE = -I$(CERTIFIER_SRC_PATH)/../include -I$(CERTIFIER_SRC_PATH)/gramine -I$(CERTIFIER_SRC_PATH)/../sample_apps/simple_app_under_gramine
 CERTIFIER_CFLAGS = $(CERTIFIER_INCLUDE) -DGRAMINE_CERTIFIER
@@ -95,42 +95,37 @@ GPP=g++
 
 certifier:
 	$(GPP) -shared -fPIC -o libcertifier.so $(CERTIFIER_CFLAGS) $(CERTIFIER_SRC) $(CERTIFIER_LDFLAGS)
-######################### CLIENT/SERVER EXECUTABLES ###########################
+
+########################### CLIENT EXECUTABLES ################################
 
 # TODO: use `$(shell pkg-config --cflags mbedtls_gramine)` instead of local mbedtls includes
 CFLAGS += -I./mbedtls/include $(SGX_INCLUDE) $(CERTIFIER_CFLAGS)
 LDFLAGS += -ldl -Wl,--enable-new-dtags $(shell pkg-config --libs mbedtls_gramine) -L/usrl/local/lib -L./ -lcertifier $(CERTIFIER_LDFLAGS) $(SGX_LDFLAGS)
 
 attest_seal_app: attest_seal_app.c certifier mbedtls/.mbedtls_configured
-	#$(CC) $< $(CFLAGS) $(LDFLAGS) -o $@
 	$(GPP) $< $(CFLAGS) $(LDFLAGS) -o $@
 
-#client: src/client.c mbedtls/.mbedtls_configured
-#	$(CC) $< $(CFLAGS) $(LDFLAGS) -o $@
+########################### CLIENT (DCAP) MANIFEST ############################
 
-############################### SERVER MANIFEST ###############################
-
-attest_seal_app.manifest: attest_seal_app.manifest.template
+attest_seal_app_dcap.manifest: attest_seal_app_dcap.manifest.template
 	gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
 		-Dra_type=$(RA_TYPE) \
 		-Dra_client_spid=$(RA_CLIENT_SPID) \
 		-Dra_client_linkable=$(RA_CLIENT_LINKABLE) \
-		$< > $@
+		$< >$@
 
-# Make on Ubuntu <= 20.04 doesn't support "Rules with Grouped Targets" (`&:`),
-# see the helloworld example for details on this workaround.
-attest_seal_app.manifest.sgx attest_seal_app.sig: sgx_sign_attest_seal_app
+attest_seal_app_dcap.manifest.sgx attest_seal_app_dcap.sig: sgx_sign_attest_seal_app_dcap
 	@:
 
-.INTERMEDIATE: sgx_sign_attest_seal_app
-sgx_sign_attest_seal_app: attest_seal_app.manifest attest_seal_app
+.INTERMEDIATE: sgx_sign_attest_seal_app_dcap
+sgx_sign_attest_seal_app_dcap: attest_seal_app_dcap.manifest attest_seal_app
 	gramine-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 
-attest_seal_app.token: attest_seal_app.sig
+attest_seal_app_dcap.token: attest_seal_app_dcap.sig
 	gramine-sgx-get-token --output $@ --sig $<
 
 ################################## CLEANUP ####################################
