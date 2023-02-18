@@ -325,6 +325,7 @@ done:
     return status;
 }
 
+int verify_quote(uint8_t* quote, size_t quote_size);
 //#if 0
 bool Attest(int claims_size, byte* claims, int* size_out, byte* out) {
     ssize_t bytes;
@@ -358,8 +359,14 @@ bool Attest(int claims_size, byte* claims, int* size_out, byte* out) {
     /* Copy out the assertion/quote */
     memcpy(out, g_quote, bytes);
     *size_out = bytes;
-    printf("Gramine Attest done\n");
-
+    printf("Gramine Attest done quote size: %d\n", *size_out);
+    print_bytes(*size_out, out);
+#if 0
+    printf("\nGramine begin remote verify quote within ATTESTTTTTT\n");
+    if (verify_quote((uint8_t*)&g_quote, bytes) != 0) {
+        return false;
+    }
+#endif
     return true;
 }
 //#endif
@@ -552,17 +559,17 @@ int (*ra_tls_verify_callback_der_f)(uint8_t* der_crt, size_t der_crt_size);
 int (*gramine_verify_quote_f)(uint8_t* quote, size_t quote_size);
 int (*sgx_qv_get_quote_supplemental_data_size)(uint32_t *p_data_size);
 
-int (*sgx_qv_verify_quote)(const uint8_t* p_quote, uint32_t quote_size, void* p_quote_collateral,
+int (*sgx_qv_verify_quote_f)(const uint8_t* p_quote, uint32_t quote_size, void* p_quote_collateral,
                         const time_t expiration_check_date,
                         uint32_t* p_collateral_expiration_status,
                         sgx_ql_qv_result_t* p_quote_verification_result, void* p_qve_report_info,
                         uint32_t supplemental_data_size, uint8_t* p_supplemental_data);
 
 
-int verify_quote(sgx_quote_t* quote) {
+int verify_quote(uint8_t* quote, size_t quote_size) {
     int ret = -1;
     //size_t quote_size = sizeof(*quote);
-    size_t quote_size = SGX_QUOTE_MAX_SIZE;
+    //size_t quote_size = SGX_QUOTE_MAX_SIZE;
     uint8_t* supplemental_data      = NULL;
     uint32_t supplemental_data_size = 0;
 
@@ -570,7 +577,7 @@ int verify_quote(sgx_quote_t* quote) {
     bool allow_outdated_tcb  = getenv_allow_outdated_tcb();
     bool allow_debug_enclave = getenv_allow_debug_enclave();
 
-    sgx_quote_body_t* quote_body = &quote->body;
+    sgx_quote_body_t* quote_body = &(((sgx_quote_t*)quote)->body);
     uint32_t collateral_expiration_status  = 1;
     sgx_ql_qv_result_t verification_result = SGX_QL_QV_RESULT_UNSPECIFIED;
     void* ra_tls_verify_lib           = NULL;
@@ -622,17 +629,17 @@ int verify_quote(sgx_quote_t* quote) {
         goto out;
     }
 
-    sgx_qv_verify_quote = (int(*)(const uint8_t*, uint32_t, void*,
+    sgx_qv_verify_quote_f = (int(*)(const uint8_t*, uint32_t, void*,
                         const time_t,
                         uint32_t*,
                         sgx_ql_qv_result_t*, void*,
                         uint32_t, uint8_t*))dlsym(sgx_verify_lib, "sgx_qv_verify_quote");
     printf("Verify function address to be called: %p with size: %ld\n",
-		    sgx_qv_verify_quote, quote_size);
+		    sgx_qv_verify_quote_f, quote_size);
     //print_bytes(quote_size, (byte*)quote);
 #if 0 
     current_time = time(NULL);
-    ret = sgx_qv_verify_quote((uint8_t*)quote, (uint32_t)quote_size, /*p_quote_collateral=*/NULL,
+    ret = sgx_qv_verify_quote_f((uint8_t*)quote, (uint32_t)quote_size, /*p_quote_collateral=*/NULL,
                               current_time, &collateral_expiration_status, &verification_result,
                               /*p_qve_report_info=*/NULL, supplemental_data_size,
                               supplemental_data);
@@ -658,7 +665,7 @@ int verify_quote(sgx_quote_t* quote) {
 
     printf("New Function address to be called: %p\n", gramine_verify_quote_f);
     ret = gramine_verify_quote_f((uint8_t*)quote, (size_t) quote_size);
-
+#if 0
     switch (verification_result) {
         case SGX_QL_QV_RESULT_OK:
             if (collateral_expiration_status != 0) {
@@ -692,6 +699,7 @@ int verify_quote(sgx_quote_t* quote) {
         ret = MBEDTLS_ERR_X509_CERT_VERIFY_FAILED;
         goto out;
     }
+#endif
 #if 0
     /* verify other relevant enclave information from the SGX quote */
     if (g_verify_measurements_cb) {
@@ -780,7 +788,7 @@ bool Verify(int user_data_size, byte* user_data, int assertion_size, byte *asser
 
     /* Invoke remote verify_quote() */
     printf("\nGramine begin remote verify quote\n");
-    if (verify_quote(quote_received) == false) {
+    if (verify_quote((uint8_t*)quote_expected, assertion_size) != 0) {
         return false;
     }
 
@@ -1156,6 +1164,24 @@ int main(int argc, char** argv) {
         printf("Unrecognized remote attestation type: %s\n", attestation_type_str);
         return 1;
     }
+
+    /* For verification */
+                void* helper_sgx_urts_lib = dlopen("libsgx_urts.so", RTLD_NOW | RTLD_GLOBAL);
+            if (!helper_sgx_urts_lib) {
+                printf("%s\n", dlerror());
+                printf("User requested RA-TLS verification with DCAP but cannot find helper"
+                               " libsgx_urts.so lib\n");
+                return 1;
+            }
+
+            //void* ra_tls_verify_lib = dlopen("libra_tls_verify_dcap.so", RTLD_LAZY);
+	    void* ra_tls_verify_lib = dlopen("libra_tls_verify_dcap_gramine.so", RTLD_LAZY);
+
+            if (!ra_tls_verify_lib) {
+                printf("%s\n", dlerror());
+                printf("User requested RA-TLS verification with DCAP but cannot find lib\n");
+                return 1;
+            }
 
     /* A. Gramine Local Tests */
     printf("Test quote interface... %s\n",
