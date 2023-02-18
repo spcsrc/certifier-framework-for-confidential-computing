@@ -19,10 +19,10 @@ RA_CLIENT_LINKABLE ?= 0
 all: app
 
 .PHONY: app
-app: ssl/attest_seal_app.crt mbedtls/.mbedtls_configured attest_seal_app_dcap.manifest.sgx attest_seal_app_dcap.sig attest_seal_app_dcap.token attest_seal_app
+app: ssl/attest_seal_app.crt mbedtls/.mbedtls_configured attest_seal_app.manifest.sgx attest_seal_app.sig attest_seal_app.token attest_seal_app
 
 #.PHONY: dcap
-#dcap: attest_seal_app_dcap.manifest.sgx attest_seal_app_dcap.sig attest_seal_app_dcap.token
+#dcap: attest_seal_app.manifest.sgx attest_seal_app.sig attest_seal_app.token
 
 ############################# SSL DATA DEPENDENCY #############################
 
@@ -107,7 +107,7 @@ attest_seal_app: attest_seal_app.c certifier mbedtls/.mbedtls_configured
 
 ########################### CLIENT (DCAP) MANIFEST ############################
 
-attest_seal_app_dcap.manifest: attest_seal_app_dcap.manifest.template
+attest_seal_app.manifest: attest_seal_app.manifest.template
 	gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
@@ -116,16 +116,16 @@ attest_seal_app_dcap.manifest: attest_seal_app_dcap.manifest.template
 		-Dra_client_linkable=$(RA_CLIENT_LINKABLE) \
 		$< >$@
 
-attest_seal_app_dcap.manifest.sgx attest_seal_app_dcap.sig: sgx_sign_attest_seal_app_dcap
+attest_seal_app.manifest.sgx attest_seal_app.sig: sgx_sign_attest_seal_app
 	@:
 
-.INTERMEDIATE: sgx_sign_attest_seal_app_dcap
-sgx_sign_attest_seal_app_dcap: attest_seal_app_dcap.manifest attest_seal_app
+.INTERMEDIATE: sgx_sign_attest_seal_app
+sgx_sign_attest_seal_app: attest_seal_app.manifest attest_seal_app
 	gramine-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 
-attest_seal_app_dcap.token: attest_seal_app_dcap.sig
+attest_seal_app.token: attest_seal_app.sig
 	gramine-sgx-get-token --output $@ --sig $<
 
 ################################## CLEANUP ####################################
