@@ -43,9 +43,12 @@ sgx.trusted_files = [
 sgx.allowed_files = [
   "file:/etc/nsswitch.conf",
   "file:/etc/ethers",
+  "file:/etc/host.conf",
   "file:/etc/hosts",
   "file:/etc/group",
   "file:/etc/passwd",
   "file:/etc/gai.conf",
   "file:server_data/store.bin",
+  "file:/etc/ssl/certs/ca-certificates.crt",
+  "file:/etc/sgx_default_qcnl.conf",
 ]
