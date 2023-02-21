@@ -25,13 +25,13 @@
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
-#include <iostream>
+//#include <iostream>
 #include <stdlib.h>
 #include <string.h>
 
 #include <unistd.h>
 #include <fcntl.h>
-
+#if 0
 #include "mbedtls/ssl.h"
 #include "mbedtls/x509.h"
 #include "mbedtls/sha256.h"
@@ -39,12 +39,12 @@
 #include "mbedtls/gcm.h"
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
-
 // SGX includes
 #include "sgx_arch.h"
 #include "sgx_attest.h"
 #include "enclave_api.h"
 #include "ra_tls.h"
+#endif
 
 #if 0
 //#include "gramine_trusted.h"
@@ -1123,4 +1123,6 @@ done:
 }
 
 #endif
-int graminelib_verify_quote(uint8_t* quote, size_t quote_size);
+void myPrintFunction(char *s);
+int graminelib_verify_quote(u_int8_t* quote, size_t quote_size);
+
