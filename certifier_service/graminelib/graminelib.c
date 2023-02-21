@@ -25,9 +25,12 @@
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
-#include <iostream>
-#include <stdlib.h>
+//#include <iostream>
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <dlfcn.h>
+#include <gnu/lib-names.h>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -41,16 +44,17 @@
 #include "mbedtls/ctr_drbg.h"
 
 // SGX includes
+#if 0
 #include "sgx_arch.h"
 #include "sgx_attest.h"
 #include "enclave_api.h"
 #include "ra_tls.h"
-
-//#include "gramine_trusted.h"
+#endif
+#include "graminelib.h"
 
 // #define DEBUG
 
-uint8_t g_quote[SGX_QUOTE_MAX_SIZE];
+//uint8_t g_quote[SGX_QUOTE_MAX_SIZE];
 
 enum { SUCCESS = 0, FAILURE = -1 };
 
@@ -611,8 +615,12 @@ int verify_quote(uint8_t* quote, size_t quote_size) {
         goto out;
     }
 #endif
+
+
+#if 0
     sgx_verify_lib = dlopen("libsgx_dcap_quoteverify.so", RTLD_LAZY);
     sgx_qv_get_quote_supplemental_data_size = (int(*)(uint32_t*))dlsym(sgx_verify_lib, "sgx_qv_get_quote_supplemental_data_size");
+
     ret = sgx_qv_get_quote_supplemental_data_size(&supplemental_data_size);
     printf("Function address to be called: %p\n", sgx_qv_get_quote_supplemental_data_size);
     if (ret != 0) {
@@ -635,6 +643,7 @@ int verify_quote(uint8_t* quote, size_t quote_size) {
     printf("Verify function address to be called: %p with size: %ld\n",
 		    sgx_qv_verify_quote_f, quote_size);
     //print_bytes(quote_size, (byte*)quote);
+#endif
 #if 0 
     current_time = time(NULL);
     ret = sgx_qv_verify_quote_f((uint8_t*)quote, (uint32_t)quote_size, /*p_quote_collateral=*/NULL,
@@ -656,13 +665,14 @@ int verify_quote(uint8_t* quote, size_t quote_size) {
     printf("Function address to be called: %p\n", ra_tls_verify_callback_der_f);
     ret = ra_tls_verify_callback_der_f((uint8_t*)quote, (size_t)supplemental_data_size);
 #endif
-
+#if 0
     ra_tls_verify_lib = dlopen("libra_tls_verify_dcap.so", RTLD_LAZY);
 
     gramine_verify_quote_f = (int(*)(uint8_t*,size_t))(dlsym(ra_tls_verify_lib, "gramine_verify_quote"));
 
     printf("New Function address to be called: %p\n", gramine_verify_quote_f);
     ret = gramine_verify_quote_f((uint8_t*)quote, (size_t) quote_size);
+#endif
 #if 0
     switch (verification_result) {
         case SGX_QL_QV_RESULT_OK:
@@ -1125,6 +1135,9 @@ done:
 #endif
 int (*gramine_verify_quote_f)(uint8_t* quote, size_t quote_size);
 
+void myPrintFunction(char *s) {
+	printf("%s\n", s);
+}
 int graminelib_verify_quote(uint8_t* quote, size_t quote_size) {
     int ret;
     size_t len;
@@ -1137,18 +1150,19 @@ int graminelib_verify_quote(uint8_t* quote, size_t quote_size) {
     mbedtls_ssl_context ssl;
     mbedtls_ssl_config conf;
 
-    mbedtls_ssl_init(&ssl);
-    mbedtls_ssl_config_init(&conf);
+    //mbedtls_ssl_init(&ssl);
+    //mbedtls_ssl_config_init(&conf);
 
     printf("Attestation type:\n");
     char attestation_type_str[SGX_QUOTE_SIZE] = {0};
-
+//#if 0
     ra_tls_verify_lib = dlopen("libra_tls_verify_dcap.so", RTLD_LAZY);
 
     gramine_verify_quote_f = (int(*)(uint8_t*,size_t))(dlsym(ra_tls_verify_lib, "gramine_verify_quote"));
 
     printf("New Function address to be called: %p\n", gramine_verify_quote_f);
     ret = gramine_verify_quote_f((uint8_t*)quote, (size_t) quote_size);
+//#endif
 #if 0
     ret = rw_file("/dev/attestation/attestation_type", (uint8_t*)attestation_type_str,
                   sizeof(attestation_type_str) - 1, /*do_write=*/false);
@@ -1184,3 +1198,4 @@ exit:
 
     return ret;
 }
+
