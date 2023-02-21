@@ -75,10 +75,13 @@ mbedtls/.mbedtls_configured: mbedtls/.mbedtls_downloaded
 
 # TODO: use `$(shell pkg-config --cflags mbedtls_gramine)` instead of local mbedtls includes
 CFLAGS += -I./mbedtls/include $(SGX_INCLUDE)
-LDFLAGS += -ldl -Wl,--enable-new-dtags $(shell pkg-config --libs mbedtls_gramine) -L/usrl/local/lib -L./ $(SGX_LDFLAGS)
+LDFLAGS += -ldl -Wl,--enable-new-dtags $(shell pkg-config --libs mbedtls_gramine) -L/usr/local/lib -L/usr/lib/x86_64-linux-gnu -L./ $(SGX_LDFLAGS)
 
-graminelib: graminelib.c mbedtls/.mbedtls_configured
-	$(GPP) $< $(CFLAGS) $(LDFLAGS) -fPIC -shared -o graminelib.so
+#graminelib: graminelib.c mbedtls/.mbedtls_configured
+#	$(GPP) $< $(CFLAGS) $(LDFLAGS) -fPIC -shared -o libgramine.so
+graminelib: 
+	$(CC) $(CFLAGS) $(LDFLAGS) -fPIC -c graminelib.c
+	$(CC) -shared -o libgramine.so graminelib.o
 
 ########################### CLIENT (DCAP) MANIFEST ############################
 
@@ -108,7 +111,7 @@ graminelib.token: graminelib.sig
 .PHONY: clean
 clean:
 	$(RM) -r \
-		*.token *.sig *.manifest.sgx *.manifest graminelib *.so *.so.* OUTPUT
+		*.token *.sig *.manifest.sgx *.manifest graminelib.o *.so *.so.* OUTPUT
 
 .PHONY: distclean
 distclean: clean
