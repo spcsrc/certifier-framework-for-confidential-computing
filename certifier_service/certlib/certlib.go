@@ -41,6 +41,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	certprotos "github.com/jlmucb/crypto/v2/certifier-framework-for-confidential-computing/certifier_service/certprotos"
 	oeverify "github.com/jlmucb/crypto/v2/certifier-framework-for-confidential-computing/certifier_service/oeverify"
+	gramineverify "github.com/jlmucb/crypto/v2/certifier-framework-for-confidential-computing/certifier_service/gramineverify"
 )
 
 type PredicateDominance struct {
@@ -1778,6 +1779,7 @@ func InitProvedStatements(pk certprotos.KeyMessage, evidenceList []*certprotos.E
 
 	for i := 0; i < len(evidenceList); i++ {
 		ev := evidenceList[i]
+
 		if  ev.GetEvidenceType() == "signed-claim" {
 			signedClaim := certprotos.SignedClaimMessage{}
 			err := proto.Unmarshal(ev.SerializedEvidence, &signedClaim)
@@ -1829,6 +1831,7 @@ func InitProvedStatements(pk certprotos.KeyMessage, evidenceList []*certprotos.E
 			}
 			ps.Proved = append(ps.Proved, cl)
 		} else if ev.GetEvidenceType() == "gramine-attestation-report" {
+			fmt.Printf("InitProvedStatements: gramine attestation report verification...\n")
 			// call gramineVerify here and construct the statement:
 			//      enclave-key speaks-for measurement
 			// from the return values.  Then add it to proved statements
@@ -1838,9 +1841,8 @@ func InitProvedStatements(pk certprotos.KeyMessage, evidenceList []*certprotos.E
 				return false
 			}
 			*/
-			// TODO: Fix this to gramine
-			serializedUD, m, err  := oeverify.OEHostVerifyEvidence(evidenceList[i].SerializedEvidence,
-				evidenceList[i-1].SerializedEvidence)
+			serializedUD, m, err  := gramineverify.GramineVerifyEvidence(evidenceList[i].SerializedEvidence,
+				evidenceList[i].SerializedEvidence)
 			if err != nil || serializedUD == nil || m == nil {
 				return false
 			}
