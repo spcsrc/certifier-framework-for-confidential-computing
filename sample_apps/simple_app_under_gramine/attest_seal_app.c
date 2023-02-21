@@ -1124,7 +1124,7 @@ done:
     return status;
 }
 
-//#if 0
+#if 0
 int main(int argc, char** argv) {
     int ret;
     size_t len;
@@ -1225,8 +1225,8 @@ exit:
 
     return ret;
 }
-//#endif
-#if 0
+#endif
+//#if 0
 int main(int argc, char** argv) {
     int ret;
     size_t len;
@@ -1314,4 +1314,4 @@ exit:
 
     return ret;
 }
-#endif
+//#endif
