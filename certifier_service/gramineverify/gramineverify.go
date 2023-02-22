@@ -39,8 +39,7 @@ func GramineVerifyEvidence(evidence []byte, endorsements []byte) ([]byte, []byte
 	copy (size_bytes, evidence)
 
 	assertion_size := binary.LittleEndian.Uint32(size_bytes)
-	fmt.Printf("GramineVerifyEvidence assertion_size2: %v\n", size_bytes)
-	fmt.Printf("GramineVerifyEvidence assertion_size2: %v\n", assertion_size)
+	fmt.Printf("GramineVerifyEvidence assertion_size: %v\n", assertion_size)
 
 	var assertion = make([]byte, assertion_size)
 	assertion = evidence[4:assertion_size + 4]
