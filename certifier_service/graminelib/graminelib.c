@@ -66,6 +66,11 @@ int (*ra_tls_create_key_and_crt_der_f)(uint8_t** der_key, size_t* der_key_size, 
                                        size_t* der_crt_size);
 
 #define SGX_QUOTE_SIZE 32
+void print_bytes(int n, byte* buf) {
+  for(int i = 0; i < n; i++)
+    printf("%02x", buf[i]);
+}
+
 #if 0
 static ssize_t rw_file(const char* path, uint8_t* buf, size_t len, bool do_write) {
     ssize_t bytes = 0;
@@ -1162,6 +1167,8 @@ int graminelib_verify_quote(size_t quote_size, uint8_t* quote, size_t* mr_size, 
 
     printf("New Function address to be called: %p\n", gramine_verify_quote_f);
     ret = gramine_verify_quote_f(quote_size, quote, mr_size, mr);
+    printf("MR returned: %ld\n", *mr_size);
+    print_bytes(*mr_size, mr);
 //#endif
 #if 0
     ret = rw_file("/dev/attestation/attestation_type", (uint8_t*)attestation_type_str,

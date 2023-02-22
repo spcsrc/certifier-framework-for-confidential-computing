@@ -79,6 +79,8 @@ func GramineVerifyEvidence(evidence []byte, endorsements []byte) ([]byte, []byte
 	outMeasurement := C.GoBytes(unsafe.Pointer(measurementOut),
 		C.int(measurementSize))
 
+	fmt.Printf("GramineVerifyEvidence measurement received: %v\n", outMeasurement)
+
 	fmt.Printf("GramineVerifyEvidence done\n")
 	return user_data, outMeasurement, nil
 }
