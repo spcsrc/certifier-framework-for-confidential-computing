@@ -558,7 +558,7 @@ int verify_quote_body_enclave_attributes(sgx_quote_body_t* quote_body, bool allo
 }
 
 int (*ra_tls_verify_callback_der_f)(uint8_t* der_crt, size_t der_crt_size);
-int (*gramine_verify_quote_f)(uint8_t* quote, size_t quote_size);
+int (*gramine_verify_quote_f)(size_t quote_size, uint8_t* quote, size_t *mr_size, uint8_t* mr);
 int (*sgx_qv_get_quote_supplemental_data_size)(uint32_t *p_data_size);
 
 int (*sgx_qv_verify_quote_f)(const uint8_t* p_quote, uint32_t quote_size, void* p_quote_collateral,
@@ -1133,12 +1133,12 @@ done:
 }
 
 #endif
-int (*gramine_verify_quote_f)(uint8_t* quote, size_t quote_size);
+int (*gramine_verify_quote_f)(size_t quote_size, uint8_t* quote, size_t *mr_size, uint8_t* mr);
 
 void myPrintFunction(char *s) {
 	printf("%s\n", s);
 }
-int graminelib_verify_quote(uint8_t* quote, size_t quote_size) {
+int graminelib_verify_quote(size_t quote_size, uint8_t* quote, size_t* mr_size, uint8_t* mr) {
     int ret;
     size_t len;
     void* ra_tls_attest_lib;
@@ -1158,10 +1158,10 @@ int graminelib_verify_quote(uint8_t* quote, size_t quote_size) {
 //#if 0
     ra_tls_verify_lib = dlopen("libra_tls_verify_dcap.so", RTLD_LAZY);
 
-    gramine_verify_quote_f = (int(*)(uint8_t*,size_t))(dlsym(ra_tls_verify_lib, "gramine_verify_quote"));
+    gramine_verify_quote_f = (int(*)(size_t, uint8_t*, size_t*, uint8_t*))(dlsym(ra_tls_verify_lib, "gramine_verify_quote"));
 
     printf("New Function address to be called: %p\n", gramine_verify_quote_f);
-    ret = gramine_verify_quote_f((uint8_t*)quote, (size_t) quote_size);
+    ret = gramine_verify_quote_f(quote_size, quote, mr_size, mr);
 //#endif
 #if 0
     ret = rw_file("/dev/attestation/attestation_type", (uint8_t*)attestation_type_str,
