@@ -1855,19 +1855,19 @@ func InitProvedStatements(pk certprotos.KeyMessage, evidenceList []*certprotos.E
 			// Get platform key from pem file
 			//stripped := StripPemHeaderAndTrailer(string(evidenceList[i-1].SerializedEvidence))
 			fmt.Printf("InitProvedStatements: Gramine attestation report strip pem...\n")
-			stripped := StripPemHeaderAndTrailer(string(evidenceList[i-2].SerializedEvidence))
-			if stripped == nil {
-				fmt.Printf("InitProvedStatements: Bad PEM\n")
-				return false
-			}
-			k := KeyFromPemFormat(*stripped)
-			fmt.Printf("InitProvedStatements: Gramine attestation report construction begin...\n")
-			cl := ConstructSevSpeaksForStatement(k, ud.EnclaveKey, m)
-			if cl == nil {
-				fmt.Printf("InitProvedStatements: ConstructEnclaveKeySpeaksForMeasurement failed\n")
-				return false
-			}
-			ps.Proved = append(ps.Proved, cl)
+			//stripped := StripPemHeaderAndTrailer(string(evidenceList[i-1].SerializedEvidence))
+			//if stripped == nil {
+			//	fmt.Printf("InitProvedStatements: Bad PEM\n")
+			//	return false
+			//}
+			//k := KeyFromPemFormat(*stripped)
+			//fmt.Printf("InitProvedStatements: Gramine attestation report construction begin...\n")
+			//cl := ConstructSevSpeaksForStatement(k, ud.EnclaveKey, m)
+			//if cl == nil {
+			//	fmt.Printf("InitProvedStatements: ConstructEnclaveKeySpeaksForMeasurement failed\n")
+			//	return false
+			//}
+			//ps.Proved = append(ps.Proved, cl)
 		} else if ev.GetEvidenceType() == "sev-attestation" {
 			// get the key from ps
 			n := len(ps.Proved) - 1
