@@ -1124,5 +1124,5 @@ done:
 
 #endif
 void myPrintFunction(char *s);
-int graminelib_verify_quote(u_int8_t* quote, size_t quote_size);
+int graminelib_verify_quote(size_t quote_size, u_int8_t* quote, size_t* mr_size, u_int8_t* mr);
 
