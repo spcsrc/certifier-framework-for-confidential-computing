@@ -1839,12 +1839,10 @@ func InitProvedStatements(pk certprotos.KeyMessage, evidenceList []*certprotos.E
 			// call gramineVerify here and construct the statement:
 			//      enclave-key speaks-for measurement
 			// from the return values.  Then add it to proved statements
-			/*
 			if i < 1  || evidenceList[i-1].GetEvidenceType() != "pem-cert-chain" {
 				fmt.Printf("InitProvedStatements: missing cert chain in gramine evidence\n")
 				return false
 			}
-			*/
 			serializedUD, m, err  := gramineverify.GramineVerifyEvidence(evidenceList[i].SerializedEvidence,
 				evidenceList[i].SerializedEvidence)
 			if err != nil || serializedUD == nil || m == nil {
@@ -1857,18 +1855,16 @@ func InitProvedStatements(pk certprotos.KeyMessage, evidenceList []*certprotos.E
 				return false
 			}
 			// Get platform key from pem file
-			//stripped := StripPemHeaderAndTrailer(string(evidenceList[i-1].SerializedEvidence))
+			stripped := StripPemHeaderAndTrailer(string(evidenceList[i-1].SerializedEvidence))
 			fmt.Printf("InitProvedStatements: Gramine attestation report strip pem...\n")
-			//stripped := StripPemHeaderAndTrailer(string(evidenceList[i-1].SerializedEvidence))
-			//if stripped == nil {
-			//	fmt.Printf("InitProvedStatements: Bad PEM\n")
-			//	return false
-			//}
-			//k := KeyFromPemFormat(*stripped)
-			//k := MakeKeyEntity(ud.EnclaveKey)
+			if stripped == nil {
+				fmt.Printf("InitProvedStatements: Bad PEM\n")
+				return false
+			}
+			k := KeyFromPemFormat(*stripped)
 			fmt.Printf("InitProvedStatements: Gramine attestation report construction begin...\n")
-			//cl := ConstructSevSpeaksForStatement(ud.EnclaveKey, ud.EnclaveKey, m)
-			cl := ConstructVseAttestClaim(ud.EnclaveKey, ud.EnclaveKey, m)
+			cl := ConstructSevSpeaksForStatement(k, ud.EnclaveKey, m)
+			//cl := ConstructVseAttestClaim(ud.EnclaveKey, ud.EnclaveKey, m)
 			if cl == nil {
 				fmt.Printf("InitProvedStatements: ConstructVseAttestClaim failed\n")
 				return false
