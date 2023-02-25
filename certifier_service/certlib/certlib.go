@@ -1486,19 +1486,23 @@ func ConstructVseAttestClaim(attestKey *certprotos.KeyMessage, enclaveKey *certp
 		fmt.Printf("Can't make attest entity\n")
 		return nil
 	}
+		fmt.Printf("Made attest entity\n")
 	em := MakeKeyEntity(enclaveKey)
 	if em == nil {
 		fmt.Printf("Can't make enclave entity\n")
 		return nil
 	}
+		fmt.Printf("Made enclave entity\n")
 	mm := MakeMeasurementEntity(measurement)
 	if mm == nil {
 		fmt.Printf("Can't make measurement entity\n")
 		return nil
 	}
+		fmt.Printf("Made measurement entity\n")
 	says := "says"
 	speaks_for := "speaks-for"
 	c1 := MakeSimpleVseClause(em, &speaks_for, mm)
+		fmt.Printf("Made simple vse clause\n")
 	return MakeIndirectVseClause(am, &says, c1)
 }
 
@@ -1861,13 +1865,15 @@ func InitProvedStatements(pk certprotos.KeyMessage, evidenceList []*certprotos.E
 			//	return false
 			//}
 			//k := KeyFromPemFormat(*stripped)
-			//fmt.Printf("InitProvedStatements: Gramine attestation report construction begin...\n")
-			//cl := ConstructSevSpeaksForStatement(k, ud.EnclaveKey, m)
-			//if cl == nil {
-			//	fmt.Printf("InitProvedStatements: ConstructEnclaveKeySpeaksForMeasurement failed\n")
-			//	return false
-			//}
-			//ps.Proved = append(ps.Proved, cl)
+			//k := MakeKeyEntity(ud.EnclaveKey)
+			fmt.Printf("InitProvedStatements: Gramine attestation report construction begin...\n")
+			//cl := ConstructSevSpeaksForStatement(ud.EnclaveKey, ud.EnclaveKey, m)
+			cl := ConstructVseAttestClaim(ud.EnclaveKey, ud.EnclaveKey, m)
+			if cl == nil {
+				fmt.Printf("InitProvedStatements: ConstructVseAttestClaim failed\n")
+				return false
+			}
+			ps.Proved = append(ps.Proved, cl)
 		} else if ev.GetEvidenceType() == "sev-attestation" {
 			// get the key from ps
 			n := len(ps.Proved) - 1
