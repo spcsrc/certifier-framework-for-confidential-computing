@@ -369,7 +369,7 @@ func AddNewFactsForGraminePlatformAttestation(publicPolicyKey *certprotos.KeyMes
 		fmt.Printf("AddNewFactsForGramineEvidence, bad measurement\n")
 		return false
 	}
-/*
+
 	// Get platformKey from  "The platform-key says the enclave-key speaks-for the measurement"
 	kc := alreadyProved.Proved[1]
 	if kc.Subject == nil || kc.Verb == nil || kc.Clause == nil {
@@ -385,10 +385,8 @@ func AddNewFactsForGraminePlatformAttestation(publicPolicyKey *certprotos.KeyMes
 		fmt.Printf("AddNewFactsForGramineEvidence, bad platform key\n")
 		return false
 	}
-*/
-	//TODO: REMOVE
-	signedPolicyKeySaysMeasurementIsTrusted := findPolicyFromMeasurement(measurementList[0].m)
-	//signedPolicyKeySaysMeasurementIsTrusted := findPolicyFromMeasurement(prog_m)
+
+	signedPolicyKeySaysMeasurementIsTrusted := findPolicyFromMeasurement(prog_m)
 	if signedPolicyKeySaysMeasurementIsTrusted == nil {
 		fmt.Printf("AddNewFactsForGramineEvidence, can't find measurement policy\n")
 		fmt.Printf("    Measurement: ")
@@ -396,23 +394,23 @@ func AddNewFactsForGraminePlatformAttestation(publicPolicyKey *certprotos.KeyMes
 		fmt.Printf("\n")
 		return false
 	}
-/*
+
 	signedPolicyKeySaysPlatformKeyIsTrusted := findPolicyFromKey(plat_key)
 	if signedPolicyKeySaysPlatformKeyIsTrusted == nil {
 		fmt.Printf("AddNewFactsForGramineEvidence, can't find platform policy\n")
 		return false
 	}
-*/
+
 	if !AddFactFromSignedClaim(signedPolicyKeySaysMeasurementIsTrusted, alreadyProved) {
 		fmt.Printf("AddNewFactsForGramineEvidence, Couldn't AddFactFromSignedClaim, Error 1\n")
 		return false
 	}
-/*
+
 	if !AddFactFromSignedClaim(signedPolicyKeySaysPlatformKeyIsTrusted, alreadyProved) {
 		fmt.Printf("AddNewFactsForGramineEvidence, Couldn't AddFactFromSignedClaim, Error 2\n")
 		return false
 	}
-*/
+
 	return true
 }
 
@@ -757,8 +755,8 @@ func ConstructProofFromGramineEvidence(publicPolicyKey *certprotos.KeyMessage, p
 		fmt.Printf("\n")
 	}
 
-	//if len(alreadyProved.Proved) < 4 {
-	if len(alreadyProved.Proved) < 3 {
+	if len(alreadyProved.Proved) < 4 {
+	//if len(alreadyProved.Proved) < 3 {
 		fmt.Printf("ConstructProofFromGramineEvidence: too few statements\n")
 		return nil, nil
 	}
@@ -775,18 +773,16 @@ func ConstructProofFromGramineEvidence(publicPolicyKey *certprotos.KeyMessage, p
 		fmt.Printf("ConstructProofFromGramineEvidence: Error 4\n")
 		return nil, nil
 	}
-/*
 	policyKeySaysPlatformKeyIsTrustedForAttestation := alreadyProved.Proved[3]
 	if policyKeySaysPlatformKeyIsTrustedForAttestation.Clause == nil {
 		fmt.Printf("ConstructProofFromGramineEvidence: Can't get platformKeyIsTrustedForAttestation\n")
 		return nil, nil
 	}
 	platformKeyIsTrustedForAttestation := policyKeySaysPlatformKeyIsTrustedForAttestation.Clause
-*/
         proof := &certprotos.Proof{}
         r1 := int32(1)
         r3 := int32(3)
-        //r6 := int32(6)
+        r6 := int32(6)
         r7 := int32(7)
 
 	enclaveKey := enclaveKeySpeaksForMeasurement.Subject
@@ -815,7 +811,6 @@ func ConstructProofFromGramineEvidence(publicPolicyKey *certprotos.KeyMessage, p
 		RuleApplied: &r3,
 	}
 	proof.Steps = append(proof.Steps, &ps1)
-/*
 	ps2 := certprotos.ProofStep {
 		S1: policyKeyIsTrusted,
 		S2: policyKeySaysPlatformKeyIsTrustedForAttestation,
@@ -831,7 +826,6 @@ func ConstructProofFromGramineEvidence(publicPolicyKey *certprotos.KeyMessage, p
 		RuleApplied: &r6,
 	}
 	proof.Steps = append(proof.Steps, &ps3)
-*/
 	// measurement is-trusted and enclaveKey speaks-for measurement -->
 	//	enclaveKey is-trusted-for-authentication (r1) or
 	//	enclaveKey is-trusted-for-attestation (r7)
@@ -1584,10 +1578,6 @@ func serviceThread(conn net.Conn, client string) {
                 fmt.Printf("Verifying proof failed\n")
                 response.Status = &failed
         }
-
-	// TODO: REMOVE
-	response.Status = &succeeded
-	// TODO: REMOVE
 
         // Debug
         fmt.Printf("Sending response\n")
