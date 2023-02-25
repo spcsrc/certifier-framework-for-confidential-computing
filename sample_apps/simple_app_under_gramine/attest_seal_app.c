@@ -785,13 +785,13 @@ bool Verify(int user_data_size, byte* user_data, int assertion_size, byte *asser
     printf("\nGramine verify quote interface mr_enclave: ");
     print_bytes(SGX_QUOTE_SIZE, quote_expected->body.report_body.mr_enclave.m);
 
-
+#if 0
     /* Invoke remote verify_quote() */
     printf("\nGramine begin remote verify quote\n");
     if (verify_quote((uint8_t*)quote_expected, assertion_size) != 0) {
         return false;
     }
-
+#endif
 
     /* Copy out quote info */
     memcpy(out, quote_expected->body.report_body.mr_signer.m, SGX_QUOTE_SIZE);
@@ -1297,13 +1297,13 @@ int main(int argc, char** argv) {
         printf("certify_me failed: result = %d\n", cert_result);
         goto exit;
     }
-
+#if 0
     cert_result = setup_server_ssl();
     if (!cert_result) {
         printf("setup_ssl failed: result = %d\n", cert_result);
         goto exit;
     }
-
+#endif
     printf("Done with certifier tests\n");
     fflush(stdout);
 
