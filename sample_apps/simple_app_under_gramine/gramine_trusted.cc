@@ -50,6 +50,7 @@ static string measurement_file("./binary_trusted_measurements_file.bin");
 //#define FLAGS_server_app_port 8124
 #define FLAGS_server_app_port 39431
 static string data_dir = "./server_data/";
+#define FLAGS_certificate_file "ca.crt"
 
 #define FLAGS_policy_store_file "store.bin"
 #define FLAGS_platform_file_name "platform_file.bin"
@@ -175,6 +176,8 @@ bool gramine_setup_certifier_functions(GramineCertifierFunctions gramineFuncs) {
   return true;
 }
 
+string pem_cert_chain;
+
 bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size) {
   static const char rnd_seed[] =
     "string to make the random number generator think it has entropy";
@@ -191,6 +194,8 @@ bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size) {
   SSL_library_init();
   printf("Done SSL init\n");
 
+  //TODO: REMOVE
+  //string enclave_type("simulated-enclave");
   string enclave_type("gramine-enclave");
   string purpose("authentication");
 
@@ -209,7 +214,15 @@ bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size) {
     printf("Can't init policy key\n");
     return false;
   }
+
+  string cert(data_dir);
+  cert.append(FLAGS_certificate_file);
+  if (!app_trust_data->initialize_gramine_enclave_data(cert)) {
+      printf("Can't init Gramine enclave\n");
+      return false;
+  }
 #if 0
+//TODO: FINISH
   // Init gramine enclave
   string attest_key_file_name(data_dir);
   attest_key_file_name.append(FLAGS_attest_key_file);
@@ -352,6 +365,15 @@ bool setup_server_ssl() {
   }
 
   printf("running as server\n");
+
+  if (app_trust_data->serialized_policy_cert_.empty())
+    printf("NULL ser pol cert\n");
+  //if (app_trust_data->private_auth_key_.SerializeToString().empty())
+  //  printf("NULL priv_auth_key_\n");
+  if (app_trust_data->private_auth_key_.certificate().empty())
+    printf("NULL priv_auth_key_.certificate\n");
+    printf("priv_auth_key_.certificate: %s\n", app_trust_data->private_auth_key_.certificate().data());
+
   gramine_server_dispatch(FLAGS_server_app_host, FLAGS_server_app_port,
       app_trust_data->serialized_policy_cert_,
       app_trust_data->private_auth_key_,
