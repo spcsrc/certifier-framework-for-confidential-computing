@@ -20,7 +20,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
+#define DEBUG 1
 // Policy store
 // -------------------------------------------------------------------
 
@@ -2018,7 +2018,7 @@ bool add_newfacts_for_sdk_platform_attestation(key_message& policy_pk,
   // Add
   //   "policyKey says measurement is-trusted"
   if (!already_proved->proved(2).has_object()) {
-    printf("Add_newfacts_for_oeplatform_attestation: no speaksfor\n");
+    printf("add_newfacts_for_sdk_platform_attestation: no speaksfor\n");
     return false;
   }
 
