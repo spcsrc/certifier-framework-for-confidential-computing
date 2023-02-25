@@ -53,6 +53,9 @@ bool gramine_Attest(int claims_size, byte* claims, int* size_out, byte* out) {
     return false;
   }
 
+  printf("Done Gramine Attest, assertion_size %d\n", assertion_size);
+  printf("Done Gramine Attest, claims_size %d\n", claims_size);
+
   int total_size = assertion_size + claims_size + (sizeof(int) * 2);
 
   int i, j = 0;
