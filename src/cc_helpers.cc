@@ -43,7 +43,7 @@
 //
 //  You may want to augment these or write replacements if your needs are fancier.
 
-//#define DEBUG
+#define DEBUG
 
 cc_trust_data::cc_trust_data(const string& enclave_type, const string& purpose,
     const string& policy_store_name) {
@@ -169,6 +169,20 @@ bool cc_trust_data::initialize_oe_enclave_data(const string& pem_cert_chain_file
 
   if (!oe_Init(pem_cert_chain_file)) {
     printf("initialize_oe_enclave_data: oe_Init failed\n");
+    return false;
+  }
+  cc_provider_provisioned_ = true;
+  return true;
+#else
+  return false;
+#endif
+}
+
+bool cc_trust_data::initialize_gramine_enclave_data(const string& pem_cert_chain_file) {
+#if GRAMINE_CERTIFIER
+   extern string pem_cert_chain;
+   if (!read_file_into_string(pem_cert_chain_file, &pem_cert_chain)) {
+    printf("gramine_Init: Can't read pem cert chain file\n");
     return false;
   }
   cc_provider_provisioned_ = true;
@@ -576,6 +590,7 @@ bool cc_trust_data::cold_init(const string& public_key_alg,
 
     // make app auth private and public key
     if (public_key_alg == "rsa-2048") {
+        printf("cold_init: Making rsa-2048 private key\n");
       if (!make_certifier_rsa_key(2048,  &private_auth_key_)) {
         printf("cold_init: Can't generate App private key\n");
         return false;
@@ -595,6 +610,7 @@ bool cc_trust_data::cold_init(const string& public_key_alg,
         return false;
     }
 
+        printf("cold_init: Making rsa-2048 public key\n");
     private_auth_key_.set_key_name("auth-key");
     if (!private_key_to_public_key(private_auth_key_, &public_auth_key_)) {
       printf("cold_init: Can't make public Auth key\n");
@@ -604,6 +620,8 @@ bool cc_trust_data::cold_init(const string& public_key_alg,
     cc_symmetric_key_initialized_ = true;
     cc_auth_key_initialized_ = true;
 
+  if (private_auth_key_.has_certificate())
+    printf("in cc_helpers - HASSSS priv_auth_key_.certificate\n");
   } else if (purpose_ == "attestation") {
 
     // Make up sealing keys for app
@@ -672,6 +690,13 @@ bool cc_trust_data::cold_init(const string& public_key_alg,
     printf("cold_init: Can't save store\n");
     return false;
   }
+  // TODO: REMOVE
+  printf("cold_init: PRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n");
+  //print_trust_data();
+  // TODO: REMOVE
+  if (private_auth_key_.has_certificate())
+    printf("CI: HASSS priv_auth_key_.certificate\n");
+    printf("CI: priv_auth_key_.certificate: %s\n", private_auth_key_.certificate().data());
   cc_policy_store_initialized_ = true;
   return true;
 }
@@ -691,6 +716,15 @@ bool cc_trust_data::warm_restart() {
     printf("cc_trust_data::warm_restart: Can't get trust data from store\n");
     return false;
   }
+  // TODO: REMOVE
+  printf("warm_restart: PRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n");
+  print_trust_data();
+  // TODO: REMOVE
+  if (private_auth_key_.has_certificate())
+    printf("WR: HASSS priv_auth_key_.certificate\n");
+    printf("WR: priv_auth_key_.certificate: %s\n", private_auth_key_.certificate().data());
+    printf("WR: pk_size: %ld\n", private_auth_key_.certificate().size());
+
   return true;
 }
 
@@ -794,7 +828,6 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
 #endif
 #ifdef GRAMINE_CERTIFIER
   } else if (enclave_type_ == "gramine-enclave") {
-#if 0
     extern string pem_cert_chain;
     if (!cc_provider_provisioned_) {
       printf("cc_trust_data::certify_me: Can't get pem-chain\n");
@@ -807,7 +840,6 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
     }
     ev->set_evidence_type("pem-cert-chain");
     ev->set_serialized_evidence(pem_cert_chain);
-#endif
 #endif
   } else {
     printf("cc_trust_data::certify_me: Unknown enclave type\n");
@@ -926,9 +958,11 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
     printf("cc_trust_data::certify_me: Certification failed\n");
     return false;
   }
-
+    //TODO: DEBUG
+//#if 0
   // Store the admissions certificate cert or platform rule
   if (purpose_ == "authentication") {
+    printf("cc_trust_data::certify_me: Storing admission cert \n");
     public_auth_key_.set_certificate(response.artifact());
     private_auth_key_.set_certificate(response.artifact());
 
@@ -940,7 +974,6 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
       X509_print_fp(stdout, art_cert);
     }
 #endif
-
     // Update store with cert and save it
     string auth_tag("auth-key");
     const key_message* km = store_.get_authentication_key_by_tag(auth_tag);
@@ -948,7 +981,16 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
       printf("cc_trust_data::certify_me: Can't find authentication key in store\n");
       return false;
     }
+
+#ifdef GRAMINE_CERTIFIER
+    if (!fetch_store()) {
+      printf("cc_trust_data::warm_restart: Can't fetch store\n");
+      return false;
+    }
+#endif
+
     ((key_message*) km)->set_certificate((byte*)response.artifact().data(), response.artifact().size());
+    printf("cc_trust_data::certify_me: artifact sz: %ld \n", response.artifact().size());
     cc_auth_key_initialized_ = true;
     cc_is_certified_ = true;
 
@@ -984,7 +1026,7 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
     printf("cc_trust_data::certify_me: Unknown purpose\n");
     return false;
   }
-
+//#endif
   return save_store();
 }
 
@@ -1317,6 +1359,8 @@ bool load_server_certs_and_key(X509* root_cert,
   string auth_cert_str;
   auth_cert_str.assign((char*)private_key.certificate().data(),
         private_key.certificate().size());
+      printf("asn1_to_x509 pk_size: %ld\n", private_key.certificate().size());
+      printf("asn1_to_x509 auth_cert_str: %s\n", auth_cert_str.c_str());
   if (!asn1_to_x509(auth_cert_str, x509_auth_key_cert)) {
       printf("asn1_to_x509 failed\n");
       return false;
