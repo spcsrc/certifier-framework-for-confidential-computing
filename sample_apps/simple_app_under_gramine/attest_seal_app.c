@@ -50,7 +50,7 @@
 
 #include "gramine_trusted.h"
 
-// #define DEBUG
+//#define DEBUG
 
 uint8_t g_quote[SGX_QUOTE_MAX_SIZE];
 
@@ -1297,13 +1297,14 @@ int main(int argc, char** argv) {
         printf("certify_me failed: result = %d\n", cert_result);
         goto exit;
     }
-#if 0
+//#if 0
+    printf("Inovking SSL connection\n");
     cert_result = setup_server_ssl();
     if (!cert_result) {
         printf("setup_ssl failed: result = %d\n", cert_result);
         goto exit;
     }
-#endif
+//#endif
     printf("Done with certifier tests\n");
     fflush(stdout);
 
