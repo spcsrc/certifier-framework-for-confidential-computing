@@ -221,6 +221,7 @@ bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size) {
       printf("Can't init Gramine enclave\n");
       return false;
   }
+
 #if 0
 //TODO: FINISH
   // Init gramine enclave
@@ -299,6 +300,7 @@ void gramine_server_dispatch(const string& host_name, int port,
 
   SSL_load_error_strings();
 
+  printf("gramine_server_dispatch begin...\n");
   X509* root_cert = X509_new();
   if (!asn1_to_x509(asn1_root_cert, root_cert)) {
     printf("Can't convert cert\n");
@@ -311,6 +313,7 @@ void gramine_server_dispatch(const string& host_name, int port,
     printf("Can't open server socket\n");
     return;
   }
+  printf("gramine_server_dispatch done sock...\n");
 
   // Set up TLS handshake data.
   SSL_METHOD* method = (SSL_METHOD*) TLS_server_method();
@@ -327,13 +330,17 @@ void gramine_server_dispatch(const string& host_name, int port,
     return;
   }
 
+  printf("gramine_server_dispatch done load_server certs...\n");
+
   const long flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_COMPRESSION;
   SSL_CTX_set_options(ctx, flags);
 
+  printf("gramine_server_dispatch done setopts...\n");
   // Verify peer
   SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
   // For debug: SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
 
+  printf("Done SSL CTX, going to listen loop\n");
   unsigned int len = 0;
   while (1) {
     if (connected) {
@@ -358,6 +365,9 @@ void gramine_server_dispatch(const string& host_name, int port,
 
 bool setup_server_ssl() {
   bool ret = true;
+
+  printf("SSL start..........n");
+
   if (!app_trust_data->warm_restart()) {
     printf("warm-restart failed\n");
     ret = false;
@@ -368,8 +378,6 @@ bool setup_server_ssl() {
 
   if (app_trust_data->serialized_policy_cert_.empty())
     printf("NULL ser pol cert\n");
-  //if (app_trust_data->private_auth_key_.SerializeToString().empty())
-  //  printf("NULL priv_auth_key_\n");
   if (app_trust_data->private_auth_key_.certificate().empty())
     printf("NULL priv_auth_key_.certificate\n");
     printf("priv_auth_key_.certificate: %s\n", app_trust_data->private_auth_key_.certificate().data());
