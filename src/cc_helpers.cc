@@ -43,7 +43,7 @@
 //
 //  You may want to augment these or write replacements if your needs are fancier.
 
-#define DEBUG
+//#define DEBUG
 
 cc_trust_data::cc_trust_data(const string& enclave_type, const string& purpose,
     const string& policy_store_name) {
@@ -182,7 +182,7 @@ bool cc_trust_data::initialize_gramine_enclave_data(const string& pem_cert_chain
 #if GRAMINE_CERTIFIER
    extern string pem_cert_chain;
    if (!read_file_into_string(pem_cert_chain_file, &pem_cert_chain)) {
-    printf("gramine_Init: Can't read pem cert chain file\n");
+    printf("initialize_gramine_enclave_data: Can't read pem cert chain file\n");
     return false;
   }
   cc_provider_provisioned_ = true;
@@ -620,8 +620,6 @@ bool cc_trust_data::cold_init(const string& public_key_alg,
     cc_symmetric_key_initialized_ = true;
     cc_auth_key_initialized_ = true;
 
-  if (private_auth_key_.has_certificate())
-    printf("in cc_helpers - HASSSS priv_auth_key_.certificate\n");
   } else if (purpose_ == "attestation") {
 
     // Make up sealing keys for app
@@ -690,26 +688,26 @@ bool cc_trust_data::cold_init(const string& public_key_alg,
     printf("cold_init: Can't save store\n");
     return false;
   }
+
   // TODO: REMOVE
   printf("cold_init: PRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n");
   //print_trust_data();
-  // TODO: REMOVE
-  if (private_auth_key_.has_certificate())
-    printf("CI: HASSS priv_auth_key_.certificate\n");
-    printf("CI: priv_auth_key_.certificate: %s\n", private_auth_key_.certificate().data());
   cc_policy_store_initialized_ = true;
+
   return true;
 }
 
 bool cc_trust_data::warm_restart() {
 
+    printf("WR::Begin func\n");
   // fetch store
-  if (!cc_policy_store_initialized_) {
+  //if (!cc_policy_store_initialized_) {
+    printf("WR::Invoking fetch...\n");
     if (!fetch_store()) {
       printf("cc_trust_data::warm_restart: Can't fetch store\n");
       return false;
     }
-  }
+ // }
   cc_policy_store_initialized_ = true;
 
   if (!get_trust_data_from_store()) {
@@ -718,12 +716,12 @@ bool cc_trust_data::warm_restart() {
   }
   // TODO: REMOVE
   printf("warm_restart: PRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n");
-  print_trust_data();
+  //print_trust_data();
   // TODO: REMOVE
-  if (private_auth_key_.has_certificate())
-    printf("WR: HASSS priv_auth_key_.certificate\n");
-    printf("WR: priv_auth_key_.certificate: %s\n", private_auth_key_.certificate().data());
-    printf("WR: pk_size: %ld\n", private_auth_key_.certificate().size());
+  //if (private_auth_key_.has_certificate())
+    //printf("WR: HASSS priv_auth_key_.certificate\n");
+    //printf("WR: priv_auth_key_.certificate: %s\n", private_auth_key_.certificate().data());
+    //printf("WR: pk_size: %ld\n", private_auth_key_.certificate().size());
 
   return true;
 }
@@ -752,12 +750,15 @@ bool cc_trust_data::GetPlatformSaysAttestClaim(signed_claim_message* scm) {
 
 bool cc_trust_data::certify_me(const string& host_name, int port) {
 
-  if (!cc_all_initialized()) {
+  printf("CM::Begin CM\n");
+  //TODO: REMOVE
+  //if (!cc_all_initialized()) {
+    printf("CM::cc init\n");
     if (!warm_restart()) {
       printf("warm restart failed\n");
       return false;
     }
-  }
+  //}
 
   evidence_list platform_evidence;
   if (enclave_type_ == "simulated-enclave" || enclave_type_ == "application-enclave") {
@@ -965,11 +966,16 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
     printf("cc_trust_data::certify_me: Storing admission cert \n");
     public_auth_key_.set_certificate(response.artifact());
     private_auth_key_.set_certificate(response.artifact());
+  if (private_auth_key_.has_certificate())
+    printf("CM: HASSS priv_auth_key_.certificate\n");
+  if (public_auth_key_.has_certificate())
+    printf("CM: HASSS pub_auth_key_.certificate\n");
 
 #ifdef DEBUG
     X509* art_cert = X509_new();
     string d_str;
     d_str.assign((char*)response.artifact().data(),response.artifact().size());
+    printf("CM: HASSS printing certificate... size: %d\n", response.artifact().size());
     if (asn1_to_x509(d_str, art_cert)) {
       X509_print_fp(stdout, art_cert);
     }
@@ -982,13 +988,17 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
       return false;
     }
 
+    //TODO: REMOVE
 #ifdef GRAMINE_CERTIFIER
+#if 0
     if (!fetch_store()) {
       printf("cc_trust_data::warm_restart: Can't fetch store\n");
       return false;
     }
 #endif
+#endif
 
+    //TODO: REMOVE
     ((key_message*) km)->set_certificate((byte*)response.artifact().data(), response.artifact().size());
     printf("cc_trust_data::certify_me: artifact sz: %ld \n", response.artifact().size());
     cc_auth_key_initialized_ = true;
@@ -1027,6 +1037,7 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
     return false;
   }
 //#endif
+  printf("cc_trust_data::certify_me: DONNNNNNNNNNNNNNEEEEEE\n");
   return save_store();
 }
 
@@ -1359,8 +1370,8 @@ bool load_server_certs_and_key(X509* root_cert,
   string auth_cert_str;
   auth_cert_str.assign((char*)private_key.certificate().data(),
         private_key.certificate().size());
-      printf("asn1_to_x509 pk_size: %ld\n", private_key.certificate().size());
-      printf("asn1_to_x509 auth_cert_str: %s\n", auth_cert_str.c_str());
+      //printf("asn1_to_x509 pk_size: %ld\n", private_key.certificate().size());
+      //printf("asn1_to_x509 auth_cert_str: %s\n", auth_cert_str.c_str());
   if (!asn1_to_x509(auth_cert_str, x509_auth_key_cert)) {
       printf("asn1_to_x509 failed\n");
       return false;
