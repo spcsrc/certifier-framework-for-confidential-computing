@@ -689,9 +689,6 @@ bool cc_trust_data::cold_init(const string& public_key_alg,
     return false;
   }
 
-  // TODO: REMOVE
-  printf("cold_init: PRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n");
-  //print_trust_data();
   cc_policy_store_initialized_ = true;
 
   return true;
@@ -700,6 +697,7 @@ bool cc_trust_data::cold_init(const string& public_key_alg,
 bool cc_trust_data::warm_restart() {
 
     printf("WR::Begin func\n");
+    //TODO: REMOVE
   // fetch store
   //if (!cc_policy_store_initialized_) {
     printf("WR::Invoking fetch...\n");
@@ -714,14 +712,6 @@ bool cc_trust_data::warm_restart() {
     printf("cc_trust_data::warm_restart: Can't get trust data from store\n");
     return false;
   }
-  // TODO: REMOVE
-  printf("warm_restart: PRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR\n");
-  //print_trust_data();
-  // TODO: REMOVE
-  //if (private_auth_key_.has_certificate())
-    //printf("WR: HASSS priv_auth_key_.certificate\n");
-    //printf("WR: priv_auth_key_.certificate: %s\n", private_auth_key_.certificate().data());
-    //printf("WR: pk_size: %ld\n", private_auth_key_.certificate().size());
 
   return true;
 }
@@ -959,23 +949,17 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
     printf("cc_trust_data::certify_me: Certification failed\n");
     return false;
   }
-    //TODO: DEBUG
-//#if 0
+
   // Store the admissions certificate cert or platform rule
   if (purpose_ == "authentication") {
     printf("cc_trust_data::certify_me: Storing admission cert \n");
     public_auth_key_.set_certificate(response.artifact());
     private_auth_key_.set_certificate(response.artifact());
-  if (private_auth_key_.has_certificate())
-    printf("CM: HASSS priv_auth_key_.certificate\n");
-  if (public_auth_key_.has_certificate())
-    printf("CM: HASSS pub_auth_key_.certificate\n");
 
 #ifdef DEBUG
     X509* art_cert = X509_new();
     string d_str;
     d_str.assign((char*)response.artifact().data(),response.artifact().size());
-    printf("CM: HASSS printing certificate... size: %d\n", response.artifact().size());
     if (asn1_to_x509(d_str, art_cert)) {
       X509_print_fp(stdout, art_cert);
     }
@@ -988,17 +972,6 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
       return false;
     }
 
-    //TODO: REMOVE
-#ifdef GRAMINE_CERTIFIER
-#if 0
-    if (!fetch_store()) {
-      printf("cc_trust_data::warm_restart: Can't fetch store\n");
-      return false;
-    }
-#endif
-#endif
-
-    //TODO: REMOVE
     ((key_message*) km)->set_certificate((byte*)response.artifact().data(), response.artifact().size());
     printf("cc_trust_data::certify_me: artifact sz: %ld \n", response.artifact().size());
     cc_auth_key_initialized_ = true;
@@ -1036,8 +1009,7 @@ bool cc_trust_data::certify_me(const string& host_name, int port) {
     printf("cc_trust_data::certify_me: Unknown purpose\n");
     return false;
   }
-//#endif
-  printf("cc_trust_data::certify_me: DONNNNNNNNNNNNNNEEEEEE\n");
+
   return save_store();
 }
 
@@ -1597,13 +1569,25 @@ bool secure_authenticated_channel::init_client_ssl(const string& host_name, int 
 
   ssl_ = SSL_new(ssl_ctx_);
   SSL_set_fd(ssl_, sock_);
-  int res = SSL_set_cipher_list(ssl_, "TLS_AES_256_GCM_SHA384");  // Change?
+  //int res = SSL_set_cipher_list(ssl_, "TLS_AES_256_GCM_SHA384");  // Change?
+  int res = SSL_CTX_set_ciphersuites(ssl_ctx_, "TLS_AES_256_GCM_SHA384");  // Change?
+  if (res == 0) {
+    int err = SSL_get_error(ssl_, res);
+    printf("SSL_set_cipher_list, err: %d ret: %d\n", err, res);
+              char msg[1024];
+              ERR_error_string_n(ERR_get_error(), msg, sizeof(msg));
+              printf("%s %s %s %s\n", msg, ERR_lib_error_string(0), ERR_func_error_string(0), ERR_reason_error_string(0));
+  }
 
   // SSL_connect - initiate the TLS/SSL handshake with an TLS/SSL server
   int ret = SSL_connect(ssl_);
   if (ret <= 0) {
     int err = SSL_get_error(ssl_, ret);
-    printf("ssl_connect failed, err: %d\n", err);
+    printf("ssl_connect failed, err: %d ret: %d\n", err, ret);
+    SSL_load_error_strings(); // just once
+              char msg[1024];
+              ERR_error_string_n(ERR_get_error(), msg, sizeof(msg));
+              printf("%s %s %s %s\n", msg, ERR_lib_error_string(0), ERR_func_error_string(0), ERR_reason_error_string(0));
     return false;
   }
 
@@ -1700,6 +1684,15 @@ void secure_authenticated_channel::server_channel_accept_and_auth(
   int res = SSL_accept(ssl_);
   if (res != 1) {
     printf("Server: Can't SSL_accept connection\n");
+
+    int err = SSL_get_error(ssl_, res);
+    printf("ssl_connect failed, err: %d res: %d\n", err, res);
+    SSL_load_error_strings(); // just once
+              char msg[1024];
+              ERR_error_string_n(ERR_get_error(), msg, sizeof(msg));
+              printf("%s %s %s %s\n", msg, ERR_lib_error_string(0), ERR_func_error_string(0), ERR_reason_error_string(0));
+
+
     unsigned long code = ERR_get_error();
     printf("Accept error: %s\n", ERR_lib_error_string(code));
     print_ssl_error(SSL_get_error(ssl_, res));
