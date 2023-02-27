@@ -1864,7 +1864,6 @@ func InitProvedStatements(pk certprotos.KeyMessage, evidenceList []*certprotos.E
 			k := KeyFromPemFormat(*stripped)
 			fmt.Printf("InitProvedStatements: Gramine attestation report construction begin...\n")
 			cl := ConstructSevSpeaksForStatement(k, ud.EnclaveKey, m)
-			//cl := ConstructVseAttestClaim(ud.EnclaveKey, ud.EnclaveKey, m)
 			if cl == nil {
 				fmt.Printf("InitProvedStatements: ConstructVseAttestClaim failed\n")
 				return false
