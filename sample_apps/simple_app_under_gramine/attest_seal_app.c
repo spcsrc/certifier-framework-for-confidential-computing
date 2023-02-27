@@ -1269,7 +1269,13 @@ int main(int argc, char** argv) {
 
     /* Certifier service integrated Attest/Verify */
     bool cert_result = false;
-    std::string data_dir = "./server_data";
+    std::string data_dir = "";
+
+    if (!strcmp(argv[2], "server")) {
+        data_dir.append("./server_data");
+    } else if (!strcmp(argv[2], "client")) {
+        data_dir.append("./client_data");
+    }
 
     GramineCertifierFunctions gramineFuncs;
     gramineFuncs.Attest = &Attest;
@@ -1291,20 +1297,28 @@ int main(int argc, char** argv) {
         printf("cold_init failed: result = %d\n", cert_result);
         goto exit;
     }
-
+#if 0
     cert_result = certify_me();
     if (!cert_result) {
         printf("certify_me failed: result = %d\n", cert_result);
         goto exit;
     }
-//#if 0
-    printf("Inovking SSL connection\n");
-    cert_result = setup_server_ssl();
-    if (!cert_result) {
-        printf("setup_ssl failed: result = %d\n", cert_result);
-        goto exit;
+#endif
+    if (!strcmp(argv[2], "server")) {
+        printf("Invoking Server SSL connection\n");
+        cert_result = setup_server_ssl();
+        if (!cert_result) {
+            printf("setup_ssl failed: result = %d\n", cert_result);
+            goto exit;
+        }
+    } else if (!strcmp(argv[2], "client")) {
+        printf("Invoking Client SSL connection\n");
+        cert_result = setup_server_ssl();
+        if (!cert_result) {
+            printf("setup_ssl failed: result = %d\n", cert_result);
+            goto exit;
+        }
     }
-//#endif
     printf("Done with certifier tests\n");
     fflush(stdout);
 
