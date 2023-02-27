@@ -19,20 +19,20 @@ RA_CLIENT_LINKABLE ?= 0
 all: app
 
 .PHONY: app
-app: ssl/attest_seal_app.crt mbedtls/.mbedtls_configured attest_seal_app.manifest.sgx attest_seal_app.sig attest_seal_app.token attest_seal_app
+app: ssl/gramine_app.crt mbedtls/.mbedtls_configured gramine_app.manifest.sgx gramine_app.sig gramine_app.token gramine_app
 
 #.PHONY: dcap
-#dcap: attest_seal_app.manifest.sgx attest_seal_app.sig attest_seal_app.token
+#dcap: gramine_app.manifest.sgx gramine_app.sig gramine_app.token
 
 ############################# SSL DATA DEPENDENCY #############################
 
 # SSL data: key and x.509 self-signed certificate
-ssl/attest_seal_app.crt: ssl/ca_config.conf
+ssl/gramine_app.crt: ssl/ca_config.conf
 	openssl genrsa -out ssl/ca.key 2048
 	openssl req -x509 -new -nodes -key ssl/ca.key -sha256 -days 1024 -out ssl/ca.crt -config ssl/ca_config.conf
-	openssl genrsa -out ssl/attest_seal_app.key 2048
-	openssl req -new -key ssl/attest_seal_app.key -out ssl/attest_seal_app.csr -config ssl/ca_config.conf
-	openssl x509 -req -days 360 -in ssl/attest_seal_app.csr -CA ssl/ca.crt -CAkey ssl/ca.key -CAcreateserial -out ssl/attest_seal_app.crt
+	openssl genrsa -out ssl/gramine_app.key 2048
+	openssl req -new -key ssl/gramine_app.key -out ssl/gramine_app.csr -config ssl/ca_config.conf
+	openssl x509 -req -days 360 -in ssl/gramine_app.csr -CA ssl/ca.crt -CAkey ssl/ca.key -CAcreateserial -out ssl/gramine_app.crt
 
 ######################### GRAMINE/SGX VARIABLES ###############################
 GRAMINE_SRC_PATH = ../../../gramine/gramine
@@ -102,12 +102,12 @@ certifier:
 CFLAGS += -I./mbedtls/include $(SGX_INCLUDE) $(CERTIFIER_CFLAGS)
 LDFLAGS += -ldl -Wl,--enable-new-dtags $(shell pkg-config --libs mbedtls_gramine) -L/usrl/local/lib -L./ -lcertifier $(CERTIFIER_LDFLAGS) $(SGX_LDFLAGS)
 
-attest_seal_app: attest_seal_app.c certifier mbedtls/.mbedtls_configured
+gramine_app: gramine_app.c certifier mbedtls/.mbedtls_configured
 	$(GPP) $< $(CFLAGS) $(LDFLAGS) -o $@
 
 ########################### CLIENT (DCAP) MANIFEST ############################
 
-attest_seal_app.manifest: attest_seal_app.manifest.template
+gramine_app.manifest: gramine_app.manifest.template
 	gramine-manifest \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 		-Darch_libdir=$(ARCH_LIBDIR) \
@@ -116,16 +116,16 @@ attest_seal_app.manifest: attest_seal_app.manifest.template
 		-Dra_client_linkable=$(RA_CLIENT_LINKABLE) \
 		$< >$@
 
-attest_seal_app.manifest.sgx attest_seal_app.sig: sgx_sign_attest_seal_app
+gramine_app.manifest.sgx gramine_app.sig: sgx_sign_gramine_app
 	@:
 
-.INTERMEDIATE: sgx_sign_attest_seal_app
-sgx_sign_attest_seal_app: attest_seal_app.manifest attest_seal_app
+.INTERMEDIATE: sgx_sign_gramine_app
+sgx_sign_gramine_app: gramine_app.manifest gramine_app
 	gramine-sgx-sign \
 		--manifest $< \
 		--output $<.sgx
 
-attest_seal_app.token: attest_seal_app.sig
+gramine_app.token: gramine_app.sig
 	gramine-sgx-get-token --output $@ --sig $<
 
 ################################## CLEANUP ####################################
@@ -133,8 +133,8 @@ attest_seal_app.token: attest_seal_app.sig
 .PHONY: clean
 clean:
 	$(RM) -r \
-		*.token *.sig *.manifest.sgx *.manifest attest_seal_app *.so *.so.* OUTPUT
+		*.token *.sig *.manifest.sgx *.manifest gramine_app *.so *.so.* OUTPUT
 
 .PHONY: distclean
 distclean: clean
-	$(RM) -r mbedtls/ *.tar.gz ssl/ca.* ssl/attest_seal_app.*
+	$(RM) -r mbedtls/ *.tar.gz ssl/ca.* ssl/gramine_app.*
