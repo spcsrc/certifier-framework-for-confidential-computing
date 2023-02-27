@@ -696,16 +696,12 @@ bool cc_trust_data::cold_init(const string& public_key_alg,
 
 bool cc_trust_data::warm_restart() {
 
-    printf("WR::Begin func\n");
-    //TODO: REMOVE
-  // fetch store
-  //if (!cc_policy_store_initialized_) {
-    printf("WR::Invoking fetch...\n");
+  if (!cc_policy_store_initialized_) {
     if (!fetch_store()) {
       printf("cc_trust_data::warm_restart: Can't fetch store\n");
       return false;
     }
- // }
+  }
   cc_policy_store_initialized_ = true;
 
   if (!get_trust_data_from_store()) {
@@ -740,15 +736,12 @@ bool cc_trust_data::GetPlatformSaysAttestClaim(signed_claim_message* scm) {
 
 bool cc_trust_data::certify_me(const string& host_name, int port) {
 
-  printf("CM::Begin CM\n");
-  //TODO: REMOVE
-  //if (!cc_all_initialized()) {
-    printf("CM::cc init\n");
+  if (!cc_all_initialized()) {
     if (!warm_restart()) {
       printf("warm restart failed\n");
       return false;
     }
-  //}
+  }
 
   evidence_list platform_evidence;
   if (enclave_type_ == "simulated-enclave" || enclave_type_ == "application-enclave") {
