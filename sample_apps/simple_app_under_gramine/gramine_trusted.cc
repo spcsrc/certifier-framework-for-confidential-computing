@@ -194,8 +194,6 @@ bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size) {
   SSL_library_init();
   printf("Done SSL init\n");
 
-  //TODO: REMOVE
-  //string enclave_type("simulated-enclave");
   string enclave_type("gramine-enclave");
   string purpose("authentication");
 
@@ -222,24 +220,6 @@ bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size) {
       return false;
   }
 
-#if 0
-//TODO: FINISH
-  // Init gramine enclave
-  string attest_key_file_name(data_dir);
-  attest_key_file_name.append(FLAGS_attest_key_file);
-  string platform_attest_file_name(data_dir);
-  platform_attest_file_name.append(FLAGS_platform_attest_endorsement);
-  string measurement_file_name(data_dir);
-  measurement_file_name.append(FLAGS_measurement_file);
-  string attest_endorsement_file_name(data_dir);
-  attest_endorsement_file_name.append(FLAGS_platform_attest_endorsement);
-
-  if (!app_trust_data->initialize_simulated_enclave_data(attest_key_file_name,
-      measurement_file_name, attest_endorsement_file_name)) {
-    printf("Can't init simulated enclave\n");
-    return false;
-  }
-#endif
   gramine_initialized = true;
 
   return true;
@@ -282,6 +262,12 @@ bool certify_me() {
 void server_application(secure_authenticated_channel& channel) {
 
   printf("Server peer id is %s\n", channel.peer_id_.c_str());
+  if (channel.peer_cert_ != nullptr) {
+    printf("Server peer cert is:\n");
+#ifdef DEBUG
+    X509_print_fp(stdout, channel.peer_cert_);
+#endif
+  }
 
   // Read message from client over authenticated, encrypted channel
   string out;
@@ -300,7 +286,7 @@ void gramine_server_dispatch(const string& host_name, int port,
 
   SSL_load_error_strings();
 
-  printf("gramine_server_dispatch begin...\n");
+  //printf("gramine_server_dispatch begin...\n");
   X509* root_cert = X509_new();
   if (!asn1_to_x509(asn1_root_cert, root_cert)) {
     printf("Can't convert cert\n");
@@ -313,7 +299,7 @@ void gramine_server_dispatch(const string& host_name, int port,
     printf("Can't open server socket\n");
     return;
   }
-  printf("gramine_server_dispatch done sock...\n");
+  //printf("gramine_server_dispatch done sock...\n");
 
   // Set up TLS handshake data.
   SSL_METHOD* method = (SSL_METHOD*) TLS_server_method();
@@ -324,6 +310,13 @@ void gramine_server_dispatch(const string& host_name, int port,
   }
   X509_STORE* cs = SSL_CTX_get_cert_store(ctx);
   X509_STORE_add_cert(cs, root_cert);
+
+#if 1
+  X509* x509_auth_cert = X509_new();
+  if (asn1_to_x509(private_key_cert, x509_auth_cert)) {
+    X509_STORE_add_cert(cs, x509_auth_cert);
+  }
+#endif
 
   if (!load_server_certs_and_key(root_cert, private_key, ctx)) {
     printf("SSL_CTX_new failed (2)\n");
@@ -341,15 +334,18 @@ void gramine_server_dispatch(const string& host_name, int port,
   // For debug: SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
 
   printf("Done SSL CTX, going to listen loop\n");
-  unsigned int len = 0;
+  fflush(stdout);
   while (1) {
-    if (connected) {
-      break;
-    }
+    //if (connected) {
+    //  break;
+    //}
 #ifdef DEBUG
     printf("at accept\n");
 #endif
+    printf("at accept\n");
+  fflush(stdout);
     struct sockaddr_in addr;
+    unsigned int len = sizeof(sockaddr_in);
     int client = accept(sock, (struct sockaddr*)&addr, &len);
     string my_role("server");
     secure_authenticated_channel nc(my_role);
@@ -366,8 +362,6 @@ void gramine_server_dispatch(const string& host_name, int port,
 bool setup_server_ssl() {
   bool ret = true;
 
-  printf("SSL start..........n");
-
   if (!app_trust_data->warm_restart()) {
     printf("warm-restart failed\n");
     ret = false;
@@ -376,12 +370,8 @@ bool setup_server_ssl() {
 
   printf("running as server\n");
 
-  if (app_trust_data->serialized_policy_cert_.empty())
-    printf("NULL ser pol cert\n");
-  if (app_trust_data->private_auth_key_.certificate().empty())
-    printf("NULL priv_auth_key_.certificate\n");
-    printf("priv_auth_key_.certificate: %s\n", app_trust_data->private_auth_key_.certificate().data());
-
+  //TODO: REMOVE
+  //server_dispatch(FLAGS_server_app_host, FLAGS_server_app_port,
   gramine_server_dispatch(FLAGS_server_app_host, FLAGS_server_app_port,
       app_trust_data->serialized_policy_cert_,
       app_trust_data->private_auth_key_,
@@ -397,6 +387,12 @@ done:
 void client_application(secure_authenticated_channel& channel) {
 
   printf("Client peer id is %s\n", channel.peer_id_.c_str());
+  if (channel.peer_cert_ != nullptr) {
+    printf("Client peer cert is:\n");
+#ifdef DEBUG
+    X509_print_fp(stdout, channel.peer_cert_);
+#endif
+  }
 
   // client sends a message over authenticated, encrypted channel
   const char* msg = "Hi from your secret client\n";
