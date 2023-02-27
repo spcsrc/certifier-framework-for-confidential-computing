@@ -23,3 +23,4 @@ bool certifier_init(char* usr_data_dir, size_t usr_data_dir_size);
 bool cold_init();
 bool certify_me();
 bool setup_server_ssl();
+bool setup_client_ssl();
