@@ -25,7 +25,6 @@
 #include <assert.h>
 #include <dlfcn.h>
 #include <errno.h>
-//#include <iostream>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -1169,6 +1168,13 @@ int graminelib_verify_quote(size_t quote_size, uint8_t* quote, size_t* mr_size, 
     ret = gramine_verify_quote_f(quote_size, quote, mr_size, mr);
     printf("MR returned: %ld\n", *mr_size);
     print_bytes(*mr_size, mr);
+
+    if (ret != 0) {
+      printf("\nRemote verification failed: %d\n", ret);
+      goto exit;
+    } else {
+      printf("\nRemote verification successful\n");
+    }
 //#endif
 #if 0
     ret = rw_file("/dev/attestation/attestation_type", (uint8_t*)attestation_type_str,
