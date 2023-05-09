@@ -29,7 +29,6 @@ Client_app_data="./app1_data/"
 Srvr_app_data="./app2_data/"
 
 SimpleServer_PID=0
-AppAsServer_PID=0
 Found_step=0        # While looking thru Steps[] for user-specified fn-name
 
 # ###########################################################################
@@ -80,6 +79,7 @@ function usage() {
 # ###########################################################################
 Steps=("show_env"
         "do_cleanup"
+        "rm_non_git_files"
         "build_utilities"
         "gen_policy_and_self_signed_cert"
         "emded_policy_in_example_app"
@@ -154,6 +154,26 @@ function run_cmd() {
    "$@"
 
    set +x
+}
+
+# ###########################################################################
+# Deep-clean the build-env to remove artifacts (e.g. generated files, binaries
+# etc.) that may have been produced by other steps. We run this to ensure
+# that this script will run successfully w/o any dependencies on executing
+# some prior steps.
+# ###########################################################################
+function rm_non_git_files() {
+    pushd "${CERT_PROTO}" > /dev/null 2>&1
+
+    echo "${Me}: Delete all files not tracked by git"
+    # shellcheck disable=SC2046
+    run_cmd rm -rf $(git ls-files . --exclude-standard --others)
+
+    echo "${Me}: Delete all files not tracked by git that are also ignored"
+    # shellcheck disable=SC2046
+    run_cmd rm -rf $(git ls-files . --exclude-standard --others --ignored)
+
+    popd > /dev/null 2>&1
 }
 
 # ###########################################################################
@@ -554,15 +574,21 @@ function show_env() {
    echo "Environment variables, script globals:"
    env | grep -E "CERT_PROTO|EXAMPLE_DIR"
 
-   local numCPUs=`grep "^processor" /proc/cpuinfo | wc -l`
-   local cpuModel=`grep "model name" /proc/cpuinfo | head -1 | cut -f2 -d':'`
-   local cpuVendor=`grep "vendor_id" /proc/cpuinfo | head -1 | cut -f2 -d':'`
-   local totalMemGB=`free -g | grep "^Mem:" | awk '{print $2}'`
+   local numCPUs=0
+   local cpuModel=0
+   local cpuVendor=0
+   local totalMemGB=0
+
+   numCPUs=$(grep -c "^processor" /proc/cpuinfo)
+   cpuModel=$(grep "model name" /proc/cpuinfo | head -1 | cut -f2 -d':')
+   cpuVendor=$(grep "vendor_id" /proc/cpuinfo | head -1 | cut -f2 -d':')
+   totalMemGB=$(free -g | grep "^Mem:" | awk '{print $2}')
 
     echo
     uname -a
-    echo "${cpuVendor}, ${numCPUs} CPUs, ${totalMemGB} GB, ${cpuModel}"
-    ping -4 -c 1 `uname -n` | head -2
+    echo
+    echo "${Me}: ${cpuVendor}, ${numCPUs} CPUs, ${totalMemGB} GB, ${cpuModel}"
+    ping -4 -c 1 "$(uname -n | head -2)"
 
     echo
     lsb_release -a
