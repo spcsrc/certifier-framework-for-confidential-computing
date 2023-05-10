@@ -3,7 +3,7 @@ Nuts and bolts of the Certifier Framework with a real example.
 
 
 A "Security Domain" is defined by a policy key by a domain owner, say Salesforce,
-to protect  some set of programs that enforce policy using Confidential Computing.
+to protect some set of programs that enforce policy using Confidential Computing.
 
 
 1. Salesforce generates a policy key and a self signed cert.  Private key is used by
@@ -12,7 +12,7 @@ the certifier service.
 2. The policy cert is conceptually embedded in an application.  In the Salesforce case,
 embedding the key in an application customized the application for Salesforce.  Note
 that the application plus key is the unforgeable "measurement" of the Salesforce application
-and is reflected in the "quote" or "attestation that comes from the program.
+and is reflected in the "quote" or "attestation" that comes from the program.
 
 3. All the Salesforces apps (with key) are measured.
 
@@ -42,7 +42,7 @@ This policy read into the certifier service:
     platform[amd-sev-snp, debug: no, migrate: no, api-major: >=0, api-minor: >=0,
       key-share: no, tcb-version: >=0] has-trusted-platform-property 
 
-6. Applications call the certifier framework to Attest to an per-instance application
+6. Applications call the certifier framework to Attest to a per-instance application
 authentication key.
 
 
@@ -73,7 +73,7 @@ Here is an example of such a program and it's interactions with certifier API.
   app_trust_data->cold_init(public_key_alg,
         symmetric_key_alg, hash_alg, hmac_alg);
 
-  // Get certified (Getting "Admissions certificate" namiong your public key and measurement)
+  // Get certified (Getting "Admissions certificate" naming your public key and measurement)
   app_trust_data->certify_me(FLAGS_policy_host, FLAGS_policy_port);
 
 
@@ -86,7 +86,7 @@ Here is an example of such a program and it's interactions with certifier API.
 
 
 The certifier service evaluates the evidence (including the attestation) against the
-policy and if is security domain compliant, it issues the "Admission Certificate"
+policy and if it is security domain compliant, it issues the "Admission Certificate"
 naming the Application public key and the program measurement.
 
 
@@ -204,7 +204,7 @@ This is a der encoded X509 cert with subject the program measurement, signed by 
 
 The program we showed you above has two instances.  One is an SSL server and one is an SSL client.
 
-In the simple example, after the certification is done they open a mutually authenticated secure channel.
+In the simple example, after the certification is done, they open a mutually-authenticated secure channel.
 
 The Client sends the message "Hi from your secret client" over the secure channel.
 
@@ -212,7 +212,7 @@ The Client sends the message "Hi from your secret client" over the secure channe
   Server peer id is Measured-010203040506070801020304050607080102030405060708010203040506070801020304050607080102030405060708
   SSL server read: Hi from your secret client
 
-The server responds with "Hi from your secret client"
+The server responds with "Hi from your secret server"
 
   running as client
   Client peer id is Measured-010203040506070801020304050607080102030405060708010203040506070801020304050607080102030405060708
